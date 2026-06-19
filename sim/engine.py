@@ -4,7 +4,7 @@ import numpy as np
 
 from sim.model import StationGraph, SimConfig, NodeType
 from sim.pedestrian import move_probability_vec
-from sim.generation import build_generator
+from sim.generation import build_generator, train_arrival_steps, sample_alight
 
 
 class Engine:
@@ -35,6 +35,17 @@ class Engine:
 
         # 노드별 발생자
         self.generators = [build_generator(nd.generation) for nd in graph.nodes]
+
+        # 승강장 열차 스케줄
+        duration = self.config.duration_seconds
+        self.train_steps: dict[int, set[int]] = {}
+        self.train_cfg = {}
+        for i, nd in enumerate(graph.nodes):
+            if nd.type == NodeType.PLATFORM and nd.train is not None:
+                self.train_steps[i] = train_arrival_steps(
+                    nd.train, self.config.dt_seconds, duration, self.rng,
+                    self.config.stochastic)
+                self.train_cfg[i] = nd.train
 
         self._pending: dict[int, np.ndarray] = {}
         self.t = 0
@@ -79,6 +90,17 @@ class Engine:
             if g:
                 newN[i] += g
                 self.total_generated += g
+
+        # 승강장 열차 이벤트: 탑승(sink) 먼저 → 하차(source) 나중
+        for i, steps in self.train_steps.items():
+            if self.t in steps:
+                cfg = self.train_cfg[i]
+                board = min(cfg.capacity, max(newN[i], 0.0))
+                newN[i] -= board
+                self.total_exited += board
+                alight = sample_alight(cfg, self.rng, self.config.stochastic)
+                newN[i] += alight
+                self.total_generated += alight
 
         self.N = newN
         self.t += 1
