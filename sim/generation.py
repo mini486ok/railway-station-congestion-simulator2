@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 import numpy as np
 
 from sim.model import GenerationConfig, TrainConfig
@@ -43,18 +42,19 @@ class RateGenerator(Generator):
         return float(max(mean, 0.0))
 
 
-class NormalPulseGenerator(Generator):
+class BatchGenerator(Generator):
+    """군집(Compound Poisson) 발생기. rate는 배치 도착률(batches/sec), batch_size는 배치당 평균 인원."""
     def __init__(self, cfg: GenerationConfig):
         self.cfg = cfg
 
     def amount(self, t_step, dt, rng, stochastic) -> float:
         t_sec = t_step * dt
-        s = max(self.cfg.sigma_sec, 1e-9)
-        pdf = math.exp(-0.5 * ((t_sec - self.cfg.center_sec) / s) ** 2) / (s * math.sqrt(2 * math.pi))
-        mean = self.cfg.total * pdf * dt
+        lam = _rate_at(self.cfg, t_sec) * dt   # 이 스텝에서 기대 배치 수
         if stochastic:
-            return float(rng.poisson(max(mean, 0.0)))
-        return float(max(mean, 0.0))
+            num_batches = float(rng.poisson(max(lam, 0.0)))
+        else:
+            num_batches = float(max(lam, 0.0))
+        return num_batches * self.cfg.batch_size
 
 
 def build_generator(cfg: GenerationConfig | None) -> Generator:
@@ -62,8 +62,8 @@ def build_generator(cfg: GenerationConfig | None) -> Generator:
         return ZeroGenerator()
     if cfg.kind in ("constant", "poisson"):
         return RateGenerator(cfg)
-    if cfg.kind == "normal_pulse":
-        return NormalPulseGenerator(cfg)
+    if cfg.kind == "batch":
+        return BatchGenerator(cfg)
     raise ValueError(f"알 수 없는 발생 종류: {cfg.kind}")
 
 

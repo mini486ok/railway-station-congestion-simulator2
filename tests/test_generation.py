@@ -36,12 +36,24 @@ def test_profile_time_varying_rate():
     assert g.amount(6, 10.0, np.random.default_rng(0), False) == 40.0   # t=60s, rate4
 
 
-def test_normal_pulse_total_conserved():
-    cfg = GenerationConfig(kind="normal_pulse", center_sec=50.0, sigma_sec=10.0, total=1000.0)
+def test_batch_deterministic():
+    """batch 결정론: rate * dt * batch_size."""
+    cfg = GenerationConfig(kind="batch", rate=2.0, batch_size=5.0)
     g = build_generator(cfg)
-    dt = 1.0
-    total = sum(g.amount(t, dt, np.random.default_rng(0), False) for t in range(0, 100))
-    assert abs(total - 1000.0) < 5.0   # 펄스 적분 ≈ total
+    # 결정론: 2.0 * 5.0 * 5.0 = 50.0
+    assert g.amount(0, 5.0, np.random.default_rng(0), False) == 50.0
+
+
+def test_batch_stochastic_nonneg_multiple():
+    """batch 확률론: 반환값은 batch_size의 비음수 배수(정수 배치 수 * batch_size)."""
+    cfg = GenerationConfig(kind="batch", rate=2.0, batch_size=3.0)
+    g = build_generator(cfg)
+    rng = np.random.default_rng(7)
+    for _ in range(50):
+        val = g.amount(0, 5.0, rng, True)
+        assert val >= 0.0
+        # val = num_batches(정수) * 3.0 → 3.0의 배수인지 확인
+        assert abs(val % 3.0) < 1e-9 or val == 0.0
 
 
 def test_train_arrival_steps_periodic():

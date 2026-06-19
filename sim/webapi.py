@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 
-from sim.io import load_config, history_to_csv, gnn_bundle, history_by_group
+from sim.io import load_config, history_to_csv, gnn_bundle, gnn_bundle_by_group, history_by_group
 from sim.engine import Engine
 
 _engine: Engine | None = None
@@ -93,6 +93,12 @@ def export_csv(layout: str = "wide") -> str:
 def export_gnn() -> str:
     eng = _require_engine()
     return json.dumps(gnn_bundle(eng.graph), ensure_ascii=False)
+
+
+def export_gnn_group() -> str:
+    """그룹 단위 GNN 번들 JSON을 반환한다."""
+    eng = _require_engine()
+    return json.dumps(gnn_bundle_by_group(eng.graph), ensure_ascii=False)
 
 
 def export_group_csv() -> str:
