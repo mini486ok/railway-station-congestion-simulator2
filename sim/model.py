@@ -169,6 +169,16 @@ class StationGraph:
             if n.initial_population < 0:
                 errors.append(f"노드 {n.id}: 초기 인원은 0 이상이어야 함")
 
+            # SINK TRAP: 출력 경로는 있는데 base_stay_prob>=1.0 → 이동확률 0
+            # (엘리베이터는 제외: engine에서 override되므로)
+            if n.type != NodeType.ELEVATOR:
+                has_outpath = out_count[n.id] > 0 or n.exit_weight > tol
+                if has_outpath and n.base_stay_prob >= 1.0 - tol:
+                    errors.append(
+                        f"노드 {n.id}: 출력/이탈 경로가 있으나 이동확률이 0입니다"
+                        f"(체류확률<1로 설정하거나 '혼잡 동적 체류'를 켜세요). 인원이 빠져나가지 못합니다"
+                    )
+
             total_out = out_weight[n.id] + n.exit_weight
             has_outflow = out_count[n.id] > 0 or n.exit_weight > 0
             if has_outflow:
