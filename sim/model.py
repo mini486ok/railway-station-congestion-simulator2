@@ -108,3 +108,51 @@ class StationGraph:
             nodes.append(Node(**nd))
         links = [Link(**dict(ld)) for ld in data["links"]]
         return cls(nodes=nodes, links=links)
+
+    def validate(self, tol: float = 1e-6) -> list[str]:
+        errors: list[str] = []
+        ids = {n.id for n in self.nodes}
+        out_weight: dict[str, float] = {n.id: 0.0 for n in self.nodes}
+        out_count: dict[str, int] = {n.id: 0 for n in self.nodes}
+
+        for l in self.links:
+            if l.source not in ids:
+                errors.append(f"링크 source가 존재하지 않는 노드: {l.source}")
+                continue
+            if l.target not in ids:
+                errors.append(f"링크 target이 존재하지 않는 노드: {l.target}")
+                continue
+            if l.distance <= 0:
+                errors.append(f"링크 거리는 0보다 커야 함: {l.source}->{l.target}")
+            if not (0.0 <= l.weight <= 1.0):
+                errors.append(f"링크 가중치는 [0,1]: {l.source}->{l.target}")
+            out_weight[l.source] += l.weight
+            out_count[l.source] += 1
+
+        for n in self.nodes:
+            if not (0.0 <= n.base_stay_prob <= 1.0):
+                errors.append(f"노드 {n.id}: 체류확률은 [0,1]")
+            if n.area <= 0:
+                errors.append(f"노드 {n.id}: 면적은 0보다 커야 함")
+            if not (0.0 <= n.exit_weight <= 1.0):
+                errors.append(f"노드 {n.id}: exit_weight는 [0,1]")
+
+            total_out = out_weight[n.id] + n.exit_weight
+            has_outflow = out_count[n.id] > 0 or n.exit_weight > 0
+            if has_outflow:
+                if abs(total_out - 1.0) > tol:
+                    errors.append(
+                        f"노드 {n.id}: 출력 가중치 합(+exit)이 1이 아님 ({total_out:.4f})")
+            else:
+                if abs(n.base_stay_prob - 1.0) > tol:
+                    errors.append(
+                        f"노드 {n.id}: 이동인원이 갈 곳이 없음(출력/exit 없음, 체류확률<1)")
+
+            if n.generation is not None and n.type not in (NodeType.ENTRANCE, NodeType.PLATFORM):
+                errors.append(f"노드 {n.id}: 발생은 출입구/승강장만 가능")
+            if n.type == NodeType.PLATFORM and n.train is None:
+                errors.append(f"노드 {n.id}: 승강장은 열차 설정(train)이 필요")
+            if n.type != NodeType.PLATFORM and n.train is not None:
+                errors.append(f"노드 {n.id}: 열차 설정은 승강장만 가능")
+
+        return errors
