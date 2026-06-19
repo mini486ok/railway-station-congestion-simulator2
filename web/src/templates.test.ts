@@ -71,6 +71,44 @@ describe('templates', () => {
     expect(hasPrecongested).toBe(true)
   })
 
+  it('mega complex station exists and validates', () => {
+    const t = SAMPLE_TEMPLATES.find((t) => t.name === '초대형 복합 환승역 (10출입구·3노선·지하3층)')
+    expect(t).toBeDefined()
+    const errors = validateGraph(t!.project.graph)
+    expect(errors, `Mega template errors:\n  ${errors.join('\n  ')}`).toEqual([])
+  })
+
+  it('mega complex station has >= 50 nodes', () => {
+    const t = SAMPLE_TEMPLATES.find((t) => t.name === '초대형 복합 환승역 (10출입구·3노선·지하3층)')
+    expect(t).toBeDefined()
+    expect(t!.project.graph.nodes.length).toBeGreaterThanOrEqual(50)
+  })
+
+  it('mega complex station has exactly 6 board platforms and 6 alight platforms', () => {
+    const t = SAMPLE_TEMPLATES.find((t) => t.name === '초대형 복합 환승역 (10출입구·3노선·지하3층)')
+    expect(t).toBeDefined()
+    const boardNodes = t!.project.graph.nodes.filter((n) => n.type === 'platform' && n.train?.mode === 'board')
+    const alightNodes = t!.project.graph.nodes.filter((n) => n.type === 'platform' && n.train?.mode === 'alight')
+    expect(boardNodes.length).toBe(6)
+    expect(alightNodes.length).toBe(6)
+  })
+
+  it('mega complex station has at least one batch generation entrance', () => {
+    const t = SAMPLE_TEMPLATES.find((t) => t.name === '초대형 복합 환승역 (10출입구·3노선·지하3층)')
+    expect(t).toBeDefined()
+    const hasBatch = t!.project.graph.nodes.some((n) => n.generation?.kind === 'batch')
+    expect(hasBatch).toBe(true)
+  })
+
+  it('mega complex station has at least one entrance with a time-varying profile', () => {
+    const t = SAMPLE_TEMPLATES.find((t) => t.name === '초대형 복합 환승역 (10출입구·3노선·지하3층)')
+    expect(t).toBeDefined()
+    const hasProfile = t!.project.graph.nodes.some(
+      (n) => n.generation?.profile != null && n.generation.profile.length > 0
+    )
+    expect(hasProfile).toBe(true)
+  })
+
   it('transfer station has explicit transfer-passage nodes between lines', () => {
     const t = SAMPLE_TEMPLATES.find((t) => t.name.startsWith('환승역'))
     expect(t).toBeDefined()

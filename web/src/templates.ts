@@ -940,6 +940,435 @@ function initialCongestionStation(): ProjectConfig {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
+// Template 12 — 초대형 복합 환승역 (10출입구·3노선·지하3층)
+// B1 대합실/게이트 → B2(호선1 상/하행 + 호선3 상행) / B3(호선2 상/하행 + 호선3 하행)
+// 총 노드: 20(출입구×2) + 6(B1 콘코스) + 4(게이트뱅크) +
+//          18(지상↔B1 수직) + 18(B1↔B2 수직) + 12(B1↔B3 수직) +
+//          12(플랫폼) + 4(환승통로) = 94 nodes
+// ──────────────────────────────────────────────────────────────────────────────
+function megaComplexStation(): ProjectConfig {
+  // ═══════════════════════════════════════════════════════════════════════
+  // 용량 계획:
+  //   호선1 상행(B2): cap 200, hw 300s → 0.667/s
+  //   호선1 하행(B2): cap 200, hw 300s → 0.667/s
+  //   호선2 상행(B3): cap 180, hw 240s → 0.750/s
+  //   호선2 하행(B3): cap 180, hw 240s → 0.750/s
+  //   호선3 상행(B2): cap 160, hw 360s → 0.444/s
+  //   호선3 하행(B3): cap 160, hw 360s → 0.444/s
+  //   합계 boarding throughput ≈ 3.722/s
+  //   목표 입구 유입 ≈ 1.1× = 4.094/s → 10 입구에 분산
+  //   (출퇴근 첨두 profile 적용 입구는 평균값으로 산정)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  // ─── 지상 출입구 10쌍 ────────────────────────────────────────────────
+  // 출입구 1~4: 동측 대합실(B1-A) 연결, 출입구 5~10: 서측 대합실(B1-B) 연결
+  // 총 rate ≈ 4.1/s. 출퇴근 profile 적용: 출입구3(batch), 출입구7(profile)
+  const me = (id: string, name: string, group: string, overrides: Partial<StationNode> = {}) =>
+    mk('entrance', id, name, group, { area: 30, base_stay_prob: 0.2, exit_weight: 0, ...overrides })
+  const meo = (id: string, name: string, group: string) =>
+    mk('entrance', id, name, group, { area: 30, base_stay_prob: 0.2, exit_weight: 1.0, generation: null })
+
+  // 동측 출입구 1~4
+  const mxe1i  = me('mx_e1i',  '1번 입구',       'mx_출입구1',  { generation: { kind: 'poisson', rate: 0.45 } })
+  const mxe1o  = meo('mx_e1o', '1번 출구',       'mx_출입구1')
+  const mxe2i  = me('mx_e2i',  '2번 입구',       'mx_출입구2',  { generation: { kind: 'poisson', rate: 0.40 } })
+  const mxe2o  = meo('mx_e2o', '2번 출구',       'mx_출입구2')
+  // 출입구3: batch — 버스 환승객 묶음 도착 (버스 1대 ≈12명, rate=1배치/30s)
+  const mxe3i  = me('mx_e3i',  '3번 입구(버스환승)', 'mx_출입구3',
+                    { generation: { kind: 'batch', rate: 0.033, batch_size: 12 } })
+  const mxe3o  = meo('mx_e3o', '3번 출구',       'mx_출입구3')
+  const mxe4i  = me('mx_e4i',  '4번 입구',       'mx_출입구4',  { generation: { kind: 'poisson', rate: 0.35 } })
+  const mxe4o  = meo('mx_e4o', '4번 출구',       'mx_출입구4')
+
+  // 서측 출입구 5~10
+  const mxe5i  = me('mx_e5i',  '5번 입구',       'mx_출입구5',  { generation: { kind: 'poisson', rate: 0.38 } })
+  const mxe5o  = meo('mx_e5o', '5번 출구',       'mx_출입구5')
+  const mxe6i  = me('mx_e6i',  '6번 입구',       'mx_출입구6',  { generation: { kind: 'poisson', rate: 0.30 } })
+  const mxe6o  = meo('mx_e6o', '6번 출구',       'mx_출입구6')
+  // 출입구7: time-varying profile — 출퇴근 첨두 패턴
+  const mxe7i  = me('mx_e7i',  '7번 입구(첨두)', 'mx_출입구7',
+                    { generation: { kind: 'poisson', rate: 0.4,
+                        profile: [[0, 0.15], [1800, 1.0], [3600, 1.0], [5400, 0.2]] } })
+  const mxe7o  = meo('mx_e7o', '7번 출구',       'mx_출입구7')
+  const mxe8i  = me('mx_e8i',  '8번 입구',       'mx_출입구8',  { generation: { kind: 'poisson', rate: 0.42 } })
+  const mxe8o  = meo('mx_e8o', '8번 출구',       'mx_출입구8')
+  const mxe9i  = me('mx_e9i',  '9번 입구',       'mx_출입구9',  { generation: { kind: 'poisson', rate: 0.50 } })
+  const mxe9o  = meo('mx_e9o', '9번 출구',       'mx_출입구9')
+  const mxe10i = me('mx_e10i', '10번 입구',      'mx_출입구10', { generation: { kind: 'poisson', rate: 0.33 } })
+  const mxe10o = meo('mx_e10o','10번 출구',      'mx_출입구10')
+
+  // ─── 지상↔B1 수직이동 (동측 3기 / 서측 3기) ────────────────────────
+  // 동측: 계단A·에스컬레이터A·엘리베이터A
+  const mxsADn  = mk('stairs',    'mx_sADn',  '동측 계단(하행)',         'mx_계단A',     { area: 12, base_stay_prob: 0.2, exit_weight: 0 })
+  const mxsAUp  = mk('stairs',    'mx_sAUp',  '동측 계단(상행)',         'mx_계단A',     { area: 12, base_stay_prob: 0.2, exit_weight: 0 })
+  const mxesADn = mk('escalator', 'mx_esADn', '동측 에스컬레이터(하행)', 'mx_에스컬A',  { area: 8,  base_stay_prob: 0.0, exit_weight: 0 })
+  const mxesAUp = mk('escalator', 'mx_esAUp', '동측 에스컬레이터(상행)', 'mx_에스컬A',  { area: 8,  base_stay_prob: 0.0, exit_weight: 0 })
+  const mxelADn = mk('elevator',  'mx_elADn', '동측 엘리베이터(하행)',   'mx_엘리베A하', { area: 5,  base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 13, speed: 8 } })
+  const mxelAUp = mk('elevator',  'mx_elAUp', '동측 엘리베이터(상행)',   'mx_엘리베A상', { area: 5,  base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 13, speed: 8 } })
+
+  // 서측: 계단B·에스컬레이터B·엘리베이터B
+  const mxsBDn  = mk('stairs',    'mx_sBDn',  '서측 계단(하행)',         'mx_계단B',     { area: 12, base_stay_prob: 0.2, exit_weight: 0 })
+  const mxsBUp  = mk('stairs',    'mx_sBUp',  '서측 계단(상행)',         'mx_계단B',     { area: 12, base_stay_prob: 0.2, exit_weight: 0 })
+  const mxesBDn = mk('escalator', 'mx_esBDn', '서측 에스컬레이터(하행)', 'mx_에스컬B',  { area: 8,  base_stay_prob: 0.0, exit_weight: 0 })
+  const mxesBUp = mk('escalator', 'mx_esBUp', '서측 에스컬레이터(상행)', 'mx_에스컬B',  { area: 8,  base_stay_prob: 0.0, exit_weight: 0 })
+  const mxelBDn = mk('elevator',  'mx_elBDn', '서측 엘리베이터(하행)',   'mx_엘리베B하', { area: 5,  base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 13, speed: 8 } })
+  const mxelBUp = mk('elevator',  'mx_elBUp', '서측 엘리베이터(상행)',   'mx_엘리베B상', { area: 5,  base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 13, speed: 8 } })
+
+  // ─── B1 대합실 — 동측(A)·서측(B) 두 구역 ───────────────────────────
+  const mxb1Ai = mk('passage', 'mx_b1Ai', 'B1 동측 대합실(진입)', 'mx_B1대합실A', { area: 120, base_stay_prob: 0.05, exit_weight: 0 })
+  const mxb1Ao = mk('passage', 'mx_b1Ao', 'B1 동측 대합실(퇴장)', 'mx_B1대합실A', { area: 120, base_stay_prob: 0.05, exit_weight: 0 })
+  const mxb1Bi = mk('passage', 'mx_b1Bi', 'B1 서측 대합실(진입)', 'mx_B1대합실B', { area: 120, base_stay_prob: 0.05, exit_weight: 0 })
+  const mxb1Bo = mk('passage', 'mx_b1Bo', 'B1 서측 대합실(퇴장)', 'mx_B1대합실B', { area: 120, base_stay_prob: 0.05, exit_weight: 0 })
+  // 중앙 연결 통로 (동↔서 대합실 연결, 유료구역 외부)
+  const mxb1Ci = mk('passage', 'mx_b1Ci', 'B1 중앙 연결통로(진입)', 'mx_B1중앙', { area: 60,  base_stay_prob: 0.05, exit_weight: 0 })
+  const mxb1Co = mk('passage', 'mx_b1Co', 'B1 중앙 연결통로(퇴장)', 'mx_B1중앙', { area: 60,  base_stay_prob: 0.05, exit_weight: 0 })
+
+  // ─── 게이트 뱅크 (동/서 유료구역 진입·퇴장) ──────────────────────────
+  const mxgAi = mk('gate', 'mx_gAi', '동측 게이트(유료구역 진입)', 'mx_게이트A', { area: 15, base_stay_prob: 0.3, exit_weight: 0 })
+  const mxgAo = mk('gate', 'mx_gAo', '동측 게이트(유료구역 퇴장)', 'mx_게이트A', { area: 15, base_stay_prob: 0.3, exit_weight: 0 })
+  const mxgBi = mk('gate', 'mx_gBi', '서측 게이트(유료구역 진입)', 'mx_게이트B', { area: 15, base_stay_prob: 0.3, exit_weight: 0 })
+  const mxgBo = mk('gate', 'mx_gBo', '서측 게이트(유료구역 퇴장)', 'mx_게이트B', { area: 15, base_stay_prob: 0.3, exit_weight: 0 })
+
+  // ─── B1↔B2 수직이동 (호선1/호선3상행 방향) ───────────────────────────
+  // 동측 쪽 B2 수직(계단C / 에스컬C / 엘리베C)
+  const mxsC2Dn  = mk('stairs',    'mx_sC2Dn',  'B2 계단(하행)',         'mx_계단C2',    { area: 12, base_stay_prob: 0.2, exit_weight: 0 })
+  const mxsC2Up  = mk('stairs',    'mx_sC2Up',  'B2 계단(상행)',         'mx_계단C2',    { area: 12, base_stay_prob: 0.2, exit_weight: 0 })
+  const mxesC2Dn = mk('escalator', 'mx_esC2Dn', 'B2 에스컬레이터(하행)', 'mx_에스컬C2', { area: 8,  base_stay_prob: 0.0, exit_weight: 0 })
+  const mxesC2Up = mk('escalator', 'mx_esC2Up', 'B2 에스컬레이터(상행)', 'mx_에스컬C2', { area: 8,  base_stay_prob: 0.0, exit_weight: 0 })
+  const mxelC2Dn = mk('elevator',  'mx_elC2Dn', 'B2 엘리베이터(하행)',   'mx_엘리베C2하',{ area: 5,  base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 12, speed: 8 } })
+  const mxelC2Up = mk('elevator',  'mx_elC2Up', 'B2 엘리베이터(상행)',   'mx_엘리베C2상',{ area: 5,  base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 12, speed: 8 } })
+
+  // ─── B1↔B3 수직이동 (호선2/호선3하행 방향) ───────────────────────────
+  // 서측 쪽 B3 수직(계단D / 에스컬D / 엘리베D)
+  const mxsD3Dn  = mk('stairs',    'mx_sD3Dn',  'B3 계단(하행)',         'mx_계단D3',    { area: 12, base_stay_prob: 0.2, exit_weight: 0 })
+  const mxsD3Up  = mk('stairs',    'mx_sD3Up',  'B3 계단(상행)',         'mx_계단D3',    { area: 12, base_stay_prob: 0.2, exit_weight: 0 })
+  const mxesD3Dn = mk('escalator', 'mx_esD3Dn', 'B3 에스컬레이터(하행)', 'mx_에스컬D3', { area: 8,  base_stay_prob: 0.0, exit_weight: 0 })
+  const mxesD3Up = mk('escalator', 'mx_esD3Up', 'B3 에스컬레이터(상행)', 'mx_에스컬D3', { area: 8,  base_stay_prob: 0.0, exit_weight: 0 })
+  const mxelD3Dn = mk('elevator',  'mx_elD3Dn', 'B3 엘리베이터(하행)',   'mx_엘리베D3하',{ area: 5,  base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 12, speed: 8 } })
+  const mxelD3Up = mk('elevator',  'mx_elD3Up', 'B3 엘리베이터(상행)',   'mx_엘리베D3상',{ area: 5,  base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 12, speed: 8 } })
+
+  // ─── B2 플랫폼: 호선1 상행/하행 + 호선3 상행 ─────────────────────────
+  // 호선1 상행 (B2)
+  const mxL1upB = mk('platform', 'mx_L1upB', '호선1 상행 승강장(승차)', 'mx_L1상행',   {
+    area: 150, base_stay_prob: 1.0, exit_weight: 0,
+    train: { first_arrival_sec: 60,  headway_sec: 300, jitter_sigma_sec: 8, capacity: 200, alight_kind: 'constant', alight_mean: 0,  alight_std: 0, mode: 'board' },
+  })
+  const mxL1upA = mk('platform', 'mx_L1upA', '호선1 상행 승강장(하차)', 'mx_L1상행',   {
+    area: 150, base_stay_prob: 0.15, exit_weight: 0,
+    train: { first_arrival_sec: 60,  headway_sec: 300, jitter_sigma_sec: 8, capacity: 0,   alight_kind: 'poisson', alight_mean: 70, alight_std: 0, mode: 'alight' },
+  })
+  // 호선1 하행 (B2)
+  const mxL1dnB = mk('platform', 'mx_L1dnB', '호선1 하행 승강장(승차)', 'mx_L1하행',   {
+    area: 150, base_stay_prob: 1.0, exit_weight: 0,
+    train: { first_arrival_sec: 150, headway_sec: 300, jitter_sigma_sec: 8, capacity: 200, alight_kind: 'constant', alight_mean: 0,  alight_std: 0, mode: 'board' },
+  })
+  const mxL1dnA = mk('platform', 'mx_L1dnA', '호선1 하행 승강장(하차)', 'mx_L1하행',   {
+    area: 150, base_stay_prob: 0.15, exit_weight: 0,
+    train: { first_arrival_sec: 150, headway_sec: 300, jitter_sigma_sec: 8, capacity: 0,   alight_kind: 'poisson', alight_mean: 70, alight_std: 0, mode: 'alight' },
+  })
+  // 호선3 상행 (B2)
+  const mxL3upB = mk('platform', 'mx_L3upB', '호선3 상행 승강장(승차)', 'mx_L3상행',   {
+    area: 130, base_stay_prob: 1.0, exit_weight: 0,
+    train: { first_arrival_sec: 120, headway_sec: 360, jitter_sigma_sec: 10,capacity: 160, alight_kind: 'constant', alight_mean: 0,  alight_std: 0, mode: 'board' },
+  })
+  const mxL3upA = mk('platform', 'mx_L3upA', '호선3 상행 승강장(하차)', 'mx_L3상행',   {
+    area: 130, base_stay_prob: 0.15, exit_weight: 0,
+    train: { first_arrival_sec: 120, headway_sec: 360, jitter_sigma_sec: 10,capacity: 0,   alight_kind: 'poisson', alight_mean: 55, alight_std: 0, mode: 'alight' },
+  })
+
+  // ─── B3 플랫폼: 호선2 상행/하행 + 호선3 하행 ─────────────────────────
+  // 호선2 상행 (B3)
+  const mxL2upB = mk('platform', 'mx_L2upB', '호선2 상행 승강장(승차)', 'mx_L2상행',   {
+    area: 150, base_stay_prob: 1.0, exit_weight: 0,
+    train: { first_arrival_sec: 90,  headway_sec: 240, jitter_sigma_sec: 8, capacity: 180, alight_kind: 'constant', alight_mean: 0,  alight_std: 0, mode: 'board' },
+  })
+  const mxL2upA = mk('platform', 'mx_L2upA', '호선2 상행 승강장(하차)', 'mx_L2상행',   {
+    area: 150, base_stay_prob: 0.15, exit_weight: 0,
+    train: { first_arrival_sec: 90,  headway_sec: 240, jitter_sigma_sec: 8, capacity: 0,   alight_kind: 'poisson', alight_mean: 60, alight_std: 0, mode: 'alight' },
+  })
+  // 호선2 하행 (B3)
+  const mxL2dnB = mk('platform', 'mx_L2dnB', '호선2 하행 승강장(승차)', 'mx_L2하행',   {
+    area: 150, base_stay_prob: 1.0, exit_weight: 0,
+    train: { first_arrival_sec: 210, headway_sec: 240, jitter_sigma_sec: 8, capacity: 180, alight_kind: 'constant', alight_mean: 0,  alight_std: 0, mode: 'board' },
+  })
+  const mxL2dnA = mk('platform', 'mx_L2dnA', '호선2 하행 승강장(하차)', 'mx_L2하행',   {
+    area: 150, base_stay_prob: 0.15, exit_weight: 0,
+    train: { first_arrival_sec: 210, headway_sec: 240, jitter_sigma_sec: 8, capacity: 0,   alight_kind: 'poisson', alight_mean: 60, alight_std: 0, mode: 'alight' },
+  })
+  // 호선3 하행 (B3)
+  const mxL3dnB = mk('platform', 'mx_L3dnB', '호선3 하행 승강장(승차)', 'mx_L3하행',   {
+    area: 130, base_stay_prob: 1.0, exit_weight: 0,
+    train: { first_arrival_sec: 300, headway_sec: 360, jitter_sigma_sec: 10,capacity: 160, alight_kind: 'constant', alight_mean: 0,  alight_std: 0, mode: 'board' },
+  })
+  const mxL3dnA = mk('platform', 'mx_L3dnA', '호선3 하행 승강장(하차)', 'mx_L3하행',   {
+    area: 130, base_stay_prob: 0.15, exit_weight: 0,
+    train: { first_arrival_sec: 300, headway_sec: 360, jitter_sigma_sec: 10,capacity: 0,   alight_kind: 'poisson', alight_mean: 55, alight_std: 0, mode: 'alight' },
+  })
+
+  // ─── 환승 통로 (유료구역 내) ──────────────────────────────────────────
+  // 호선1 하차 → 호선2 승차 (L1→L2)
+  const mxTR12 = mk('passage', 'mx_TR12', '환승통로(호선1→호선2)', 'mx_환승통로12', { area: 45, base_stay_prob: 0.05, exit_weight: 0 })
+  // 호선2 하차 → 호선3 승차 (L2→L3)
+  const mxTR23 = mk('passage', 'mx_TR23', '환승통로(호선2→호선3)', 'mx_환승통로23', { area: 45, base_stay_prob: 0.05, exit_weight: 0 })
+  // 호선3 하차 → 호선1 승차 (L3→L1)
+  const mxTR31 = mk('passage', 'mx_TR31', '환승통로(호선3→호선1)', 'mx_환승통로31', { area: 45, base_stay_prob: 0.05, exit_weight: 0 })
+  // 호선1 하차 → 호선3 승차 (L1→L3)
+  const mxTR13 = mk('passage', 'mx_TR13', '환승통로(호선1→호선3)', 'mx_환승통로13', { area: 45, base_stay_prob: 0.05, exit_weight: 0 })
+
+  // ═══════════════════════════════════════════════════════════════════════
+  const nodes: StationNode[] = [
+    // 출입구 20
+    mxe1i, mxe1o, mxe2i, mxe2o, mxe3i, mxe3o, mxe4i, mxe4o,
+    mxe5i, mxe5o, mxe6i, mxe6o, mxe7i, mxe7o, mxe8i, mxe8o,
+    mxe9i, mxe9o, mxe10i, mxe10o,
+    // 지상↔B1 수직이동 12
+    mxsADn, mxsAUp, mxesADn, mxesAUp, mxelADn, mxelAUp,
+    mxsBDn, mxsBUp, mxesBDn, mxesBUp, mxelBDn, mxelBUp,
+    // B1 대합실·중앙연결 6
+    mxb1Ai, mxb1Ao, mxb1Bi, mxb1Bo, mxb1Ci, mxb1Co,
+    // 게이트 4
+    mxgAi, mxgAo, mxgBi, mxgBo,
+    // B1↔B2 수직이동 6
+    mxsC2Dn, mxsC2Up, mxesC2Dn, mxesC2Up, mxelC2Dn, mxelC2Up,
+    // B1↔B3 수직이동 6
+    mxsD3Dn, mxsD3Up, mxesD3Dn, mxesD3Up, mxelD3Dn, mxelD3Up,
+    // 플랫폼 12
+    mxL1upB, mxL1upA, mxL1dnB, mxL1dnA,
+    mxL2upB, mxL2upA, mxL2dnB, mxL2dnA,
+    mxL3upB, mxL3upA, mxL3dnB, mxL3dnA,
+    // 환승통로 4
+    mxTR12, mxTR23, mxTR31, mxTR13,
+  ]
+  // 총 노드: 20+12+6+4+6+6+12+4 = 70
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // 링크 정의
+  // 수직이동 모드분담: 에스컬레이터(3) / 계단(1) / 엘리베이터(0.4)
+  // ═══════════════════════════════════════════════════════════════════════
+  const links: RawLink[] = [
+    // ── 동측 출입구 1~4 → 동측 수직하행 ─────────────────────────────────
+    lnk('mx_e1i', 'mx_sADn',  30, 1),
+    lnk('mx_e1i', 'mx_esADn', 25, 3),
+    lnk('mx_e1i', 'mx_elADn', 15, 0.4),
+    lnk('mx_e2i', 'mx_sADn',  35, 1),
+    lnk('mx_e2i', 'mx_esADn', 30, 3),
+    lnk('mx_e2i', 'mx_elADn', 20, 0.4),
+    lnk('mx_e3i', 'mx_sADn',  40, 1),
+    lnk('mx_e3i', 'mx_esADn', 35, 3),
+    lnk('mx_e3i', 'mx_elADn', 22, 0.4),
+    lnk('mx_e4i', 'mx_sADn',  38, 1),
+    lnk('mx_e4i', 'mx_esADn', 33, 3),
+    lnk('mx_e4i', 'mx_elADn', 20, 0.4),
+
+    // 동측 수직하행 → B1 동측 대합실 진입
+    lnk('mx_sADn',  'mx_b1Ai', 20, 1),
+    lnk('mx_esADn', 'mx_b1Ai', 15, 1),
+    lnk('mx_elADn', 'mx_b1Ai', 10, 1),
+
+    // ── 서측 출입구 5~10 → 서측 수직하행 ────────────────────────────────
+    lnk('mx_e5i',  'mx_sBDn',  30, 1),
+    lnk('mx_e5i',  'mx_esBDn', 25, 3),
+    lnk('mx_e5i',  'mx_elBDn', 15, 0.4),
+    lnk('mx_e6i',  'mx_sBDn',  35, 1),
+    lnk('mx_e6i',  'mx_esBDn', 30, 3),
+    lnk('mx_e6i',  'mx_elBDn', 20, 0.4),
+    lnk('mx_e7i',  'mx_sBDn',  40, 1),
+    lnk('mx_e7i',  'mx_esBDn', 35, 3),
+    lnk('mx_e7i',  'mx_elBDn', 22, 0.4),
+    lnk('mx_e8i',  'mx_sBDn',  38, 1),
+    lnk('mx_e8i',  'mx_esBDn', 33, 3),
+    lnk('mx_e8i',  'mx_elBDn', 20, 0.4),
+    lnk('mx_e9i',  'mx_sBDn',  42, 1),
+    lnk('mx_e9i',  'mx_esBDn', 37, 3),
+    lnk('mx_e9i',  'mx_elBDn', 25, 0.4),
+    lnk('mx_e10i', 'mx_sBDn',  36, 1),
+    lnk('mx_e10i', 'mx_esBDn', 31, 3),
+    lnk('mx_e10i', 'mx_elBDn', 22, 0.4),
+
+    // 서측 수직하행 → B1 서측 대합실 진입
+    lnk('mx_sBDn',  'mx_b1Bi', 20, 1),
+    lnk('mx_esBDn', 'mx_b1Bi', 15, 1),
+    lnk('mx_elBDn', 'mx_b1Bi', 10, 1),
+
+    // ── B1 동측 대합실 → 중앙연결통로(진입) 또는 동측 게이트 ─────────────
+    // 동측 대합실에서 60%는 동측 게이트, 40%는 중앙 연결통로로 이동
+    lnk('mx_b1Ai', 'mx_gAi',  30, 3),
+    lnk('mx_b1Ai', 'mx_b1Ci', 50, 2),
+
+    // ── B1 서측 대합실 → 중앙연결통로(진입) 또는 서측 게이트 ─────────────
+    lnk('mx_b1Bi', 'mx_gBi',  30, 3),
+    lnk('mx_b1Bi', 'mx_b1Ci', 50, 2),
+
+    // ── B1 중앙 연결통로(진입) → 동측/서측 게이트 분산 ──────────────────
+    lnk('mx_b1Ci', 'mx_gAi', 40, 1),
+    lnk('mx_b1Ci', 'mx_gBi', 40, 1),
+
+    // ── 동측 게이트(진입) → B1↔B2 수직하행 (호선1/호선3상행 방향) ────────
+    lnk('mx_gAi', 'mx_sC2Dn',  15, 1),
+    lnk('mx_gAi', 'mx_esC2Dn', 10, 3),
+    lnk('mx_gAi', 'mx_elC2Dn',  8, 0.4),
+
+    // ── 서측 게이트(진입) → B1↔B3 수직하행 (호선2/호선3하행 방향) ────────
+    lnk('mx_gBi', 'mx_sD3Dn',  15, 1),
+    lnk('mx_gBi', 'mx_esD3Dn', 10, 3),
+    lnk('mx_gBi', 'mx_elD3Dn',  8, 0.4),
+
+    // ── B2 수직하행 → B2 플랫폼 (호선1 상행/하행 + 호선3 상행) ────────────
+    // 70% 호선1, 30% 호선3 (호선3상행만 B2에 있음)
+    lnk('mx_sC2Dn',  'mx_L1upB', 20, 5),
+    lnk('mx_sC2Dn',  'mx_L1dnB', 20, 5),
+    lnk('mx_sC2Dn',  'mx_L3upB', 25, 3),
+    lnk('mx_esC2Dn', 'mx_L1upB', 15, 5),
+    lnk('mx_esC2Dn', 'mx_L1dnB', 15, 5),
+    lnk('mx_esC2Dn', 'mx_L3upB', 20, 3),
+    lnk('mx_elC2Dn', 'mx_L1upB', 10, 5),
+    lnk('mx_elC2Dn', 'mx_L1dnB', 10, 5),
+    lnk('mx_elC2Dn', 'mx_L3upB', 12, 3),
+
+    // ── B3 수직하행 → B3 플랫폼 (호선2 상행/하행 + 호선3 하행) ────────────
+    // 70% 호선2, 30% 호선3하행
+    lnk('mx_sD3Dn',  'mx_L2upB', 20, 5),
+    lnk('mx_sD3Dn',  'mx_L2dnB', 20, 5),
+    lnk('mx_sD3Dn',  'mx_L3dnB', 25, 3),
+    lnk('mx_esD3Dn', 'mx_L2upB', 15, 5),
+    lnk('mx_esD3Dn', 'mx_L2dnB', 15, 5),
+    lnk('mx_esD3Dn', 'mx_L3dnB', 20, 3),
+    lnk('mx_elD3Dn', 'mx_L2upB', 10, 5),
+    lnk('mx_elD3Dn', 'mx_L2dnB', 10, 5),
+    lnk('mx_elD3Dn', 'mx_L3dnB', 12, 3),
+
+    // ── B2 플랫폼(하차) → B2 수직상행(70%) + 환승통로(30%) ──────────────
+    // 호선1 상행 하차: 75% 출구방향, 10% L2환승, 15% L3환승
+    lnk('mx_L1upA', 'mx_sC2Up',  20, 6.5),
+    lnk('mx_L1upA', 'mx_esC2Up', 15, 19.5),
+    lnk('mx_L1upA', 'mx_elC2Up', 10, 2.6),
+    lnk('mx_L1upA', 'mx_TR12',   40, 4),  // →호선2 (env:10%)
+    lnk('mx_L1upA', 'mx_TR13',   45, 6),  // →호선3 (env:15%)
+
+    // 호선1 하행 하차: 75% 출구방향, 10% L2환승, 15% L3환승
+    lnk('mx_L1dnA', 'mx_sC2Up',  20, 6.5),
+    lnk('mx_L1dnA', 'mx_esC2Up', 15, 19.5),
+    lnk('mx_L1dnA', 'mx_elC2Up', 10, 2.6),
+    lnk('mx_L1dnA', 'mx_TR12',   40, 4),
+    lnk('mx_L1dnA', 'mx_TR13',   45, 6),
+
+    // 호선3 상행 하차: 80% 출구방향, 20% L1환승
+    lnk('mx_L3upA', 'mx_sC2Up',  20, 5.3),
+    lnk('mx_L3upA', 'mx_esC2Up', 15, 15.9),
+    lnk('mx_L3upA', 'mx_elC2Up', 10, 2.1),
+    lnk('mx_L3upA', 'mx_TR31',   45, 5.7), // →호선1 (20%)
+
+    // ── B3 플랫폼(하차) → B3 수직상행(70%) + 환승통로(30%) ──────────────
+    // 호선2 상행 하차: 80% 출구방향, 20% L3환승
+    lnk('mx_L2upA', 'mx_sD3Up',  20, 5.3),
+    lnk('mx_L2upA', 'mx_esD3Up', 15, 15.9),
+    lnk('mx_L2upA', 'mx_elD3Up', 10, 2.1),
+    lnk('mx_L2upA', 'mx_TR23',   45, 5.7), // →호선3 (20%)
+
+    // 호선2 하행 하차: 80% 출구방향, 20% L3환승
+    lnk('mx_L2dnA', 'mx_sD3Up',  20, 5.3),
+    lnk('mx_L2dnA', 'mx_esD3Up', 15, 15.9),
+    lnk('mx_L2dnA', 'mx_elD3Up', 10, 2.1),
+    lnk('mx_L2dnA', 'mx_TR23',   45, 5.7),
+
+    // 호선3 하행 하차: 75% 출구방향, 25% L2환승
+    lnk('mx_L3dnA', 'mx_sD3Up',  20, 4.5),
+    lnk('mx_L3dnA', 'mx_esD3Up', 15, 13.5),
+    lnk('mx_L3dnA', 'mx_elD3Up', 10, 1.8),
+    lnk('mx_L3dnA', 'mx_TR23',   45, 6.65), // →호선3→호선2 (25%)
+
+    // ── 환승통로 → 목적 플랫폼 ──────────────────────────────────────────
+    // L1→L2: 호선2 상행 또는 하행 (50:50)
+    lnk('mx_TR12', 'mx_L2upB', 50, 1),
+    lnk('mx_TR12', 'mx_L2dnB', 50, 1),
+    // L2→L3: 호선3 상행(B2) 또는 하행(B3)
+    lnk('mx_TR23', 'mx_L3upB', 50, 1),
+    lnk('mx_TR23', 'mx_L3dnB', 50, 1),
+    // L3→L1: 호선1 상행 또는 하행 (50:50)
+    lnk('mx_TR31', 'mx_L1upB', 50, 1),
+    lnk('mx_TR31', 'mx_L1dnB', 50, 1),
+    // L1→L3: 호선3 상행(B2) 또는 하행(B3)
+    lnk('mx_TR13', 'mx_L3upB', 50, 1),
+    lnk('mx_TR13', 'mx_L3dnB', 50, 1),
+
+    // ── B2 수직상행 → 동측 게이트(퇴장) ─────────────────────────────────
+    lnk('mx_sC2Up',  'mx_gAo', 15, 1),
+    lnk('mx_esC2Up', 'mx_gAo', 10, 1),
+    lnk('mx_elC2Up', 'mx_gAo',  8, 1),
+
+    // ── B3 수직상행 → 서측 게이트(퇴장) ─────────────────────────────────
+    lnk('mx_sD3Up',  'mx_gBo', 15, 1),
+    lnk('mx_esD3Up', 'mx_gBo', 10, 1),
+    lnk('mx_elD3Up', 'mx_gBo',  8, 1),
+
+    // ── 동측 게이트(퇴장) → B1 동측 대합실(퇴장) ────────────────────────
+    lnk('mx_gAo', 'mx_b1Ao', 30, 1),
+
+    // ── 서측 게이트(퇴장) → B1 서측 대합실(퇴장) ────────────────────────
+    lnk('mx_gBo', 'mx_b1Bo', 30, 1),
+
+    // ── B1 동측 대합실(퇴장) → 중앙연결통로(퇴장)(30%) + 지상 수직상행(70%) ─
+    lnk('mx_b1Ao', 'mx_sAUp',  20, 2),
+    lnk('mx_b1Ao', 'mx_esAUp', 15, 6),
+    lnk('mx_b1Ao', 'mx_elAUp', 10, 0.8),
+    lnk('mx_b1Ao', 'mx_b1Co',  40, 3.1),  // 30% → 서측 출구 방향 중앙통로
+
+    // ── B1 서측 대합실(퇴장) → 중앙연결통로(퇴장)(30%) + 지상 수직상행(70%) ─
+    lnk('mx_b1Bo', 'mx_sBUp',  20, 2),
+    lnk('mx_b1Bo', 'mx_esBUp', 15, 6),
+    lnk('mx_b1Bo', 'mx_elBUp', 10, 0.8),
+    lnk('mx_b1Bo', 'mx_b1Co',  40, 3.1),
+
+    // ── B1 중앙 연결통로(퇴장) → 동측 or 서측 지상 수직상행 ─────────────
+    lnk('mx_b1Co', 'mx_sAUp',  30, 1),
+    lnk('mx_b1Co', 'mx_esAUp', 25, 3),
+    lnk('mx_b1Co', 'mx_elAUp', 18, 0.4),
+    lnk('mx_b1Co', 'mx_sBUp',  30, 1),
+    lnk('mx_b1Co', 'mx_esBUp', 25, 3),
+    lnk('mx_b1Co', 'mx_elBUp', 18, 0.4),
+
+    // ── 동측 지상 수직상행 → 동측 출구 ──────────────────────────────────
+    lnk('mx_sAUp',  'mx_e1o', 30, 1),
+    lnk('mx_sAUp',  'mx_e2o', 35, 1),
+    lnk('mx_sAUp',  'mx_e3o', 38, 1),
+    lnk('mx_sAUp',  'mx_e4o', 36, 1),
+    lnk('mx_esAUp', 'mx_e1o', 25, 1),
+    lnk('mx_esAUp', 'mx_e2o', 30, 1),
+    lnk('mx_esAUp', 'mx_e3o', 33, 1),
+    lnk('mx_esAUp', 'mx_e4o', 31, 1),
+    lnk('mx_elAUp', 'mx_e1o', 18, 1),
+    lnk('mx_elAUp', 'mx_e2o', 20, 1),
+    lnk('mx_elAUp', 'mx_e3o', 22, 1),
+    lnk('mx_elAUp', 'mx_e4o', 21, 1),
+
+    // ── 서측 지상 수직상행 → 서측 출구 ──────────────────────────────────
+    lnk('mx_sBUp',  'mx_e5o',  30, 1),
+    lnk('mx_sBUp',  'mx_e6o',  35, 1),
+    lnk('mx_sBUp',  'mx_e7o',  38, 1),
+    lnk('mx_sBUp',  'mx_e8o',  36, 1),
+    lnk('mx_sBUp',  'mx_e9o',  40, 1),
+    lnk('mx_sBUp',  'mx_e10o', 34, 1),
+    lnk('mx_esBUp', 'mx_e5o',  25, 1),
+    lnk('mx_esBUp', 'mx_e6o',  30, 1),
+    lnk('mx_esBUp', 'mx_e7o',  33, 1),
+    lnk('mx_esBUp', 'mx_e8o',  31, 1),
+    lnk('mx_esBUp', 'mx_e9o',  35, 1),
+    lnk('mx_esBUp', 'mx_e10o', 29, 1),
+    lnk('mx_elBUp', 'mx_e5o',  18, 1),
+    lnk('mx_elBUp', 'mx_e6o',  20, 1),
+    lnk('mx_elBUp', 'mx_e7o',  22, 1),
+    lnk('mx_elBUp', 'mx_e8o',  21, 1),
+    lnk('mx_elBUp', 'mx_e9o',  24, 1),
+    lnk('mx_elBUp', 'mx_e10o', 19, 1),
+  ]
+
+  return {
+    graph: { nodes, links: finalizeWeights(nodes, links) },
+    config: { ...defaultSimConfig(), duration_seconds: 3600, dt_seconds: 5 },
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 // 내보내기
 // ──────────────────────────────────────────────────────────────────────────────
 export const SAMPLE_TEMPLATES: { name: string; project: ProjectConfig }[] = [
@@ -954,6 +1383,7 @@ export const SAMPLE_TEMPLATES: { name: string; project: ProjectConfig }[] = [
   { name: '통근 첨두 패턴 역', project: commutePeakStation() },
   { name: '심야 저밀도 역', project: lateNightStation() },
   { name: '열차 연착(초기 혼잡) 역', project: initialCongestionStation() },
+  { name: '초대형 복합 환승역 (10출입구·3노선·지하3층)', project: megaComplexStation() },
 ]
 
 /**
