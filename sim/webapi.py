@@ -67,3 +67,12 @@ def export_csv(layout: str = "wide") -> str:
 def export_gnn() -> str:
     assert _engine is not None
     return json.dumps(gnn_bundle(_engine.graph), ensure_ascii=False)
+
+
+def history_json() -> str:
+    assert _engine is not None
+    return json.dumps({
+        "node_ids": _engine.node_ids,
+        "dt": _engine.config.dt_seconds,
+        "values": [[float(x) for x in row] for row in _engine.history],
+    }, ensure_ascii=False)

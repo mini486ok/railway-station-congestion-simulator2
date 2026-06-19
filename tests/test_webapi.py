@@ -63,3 +63,14 @@ def test_export_csv_and_gnn():
     bundle = json.loads(webapi.export_gnn())
     assert set(bundle.keys()) == {"adjacency", "distance", "travel_time", "node_features"}
     assert bundle["adjacency"].splitlines()[0] == ",A,B"
+
+
+def test_history_json_after_run():
+    import json as _json
+    webapi.load(_cfg_text(duration=20.0, dt=5.0))
+    webapi.run_all()
+    h = _json.loads(webapi.history_json())
+    assert h["node_ids"] == ["A", "B"]
+    assert h["dt"] == 5.0
+    assert len(h["values"]) == 5          # num_steps(4) + 1 초기행
+    assert len(h["values"][0]) == 2       # 노드 수

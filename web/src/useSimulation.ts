@@ -98,7 +98,18 @@ export function useSimulation(opts: Options = {}) {
     if (status === 'idle' || status === 'error') { const ok = await prepare(); if (!ok) return }
     setStatus('running')
     const snap = await client().runAll()
-    setSnapshot(snap); setStatus('done')
+    const h = await client().historyJson()
+    const hist: Snapshot[] = h.values.map((row, i) => ({
+      t: i,
+      time_sec: i * h.dt,
+      N: row,
+      node_ids: h.node_ids,
+      total_generated: snap.total_generated,
+      total_exited: snap.total_exited,
+    }))
+    setHistory(hist)
+    setSnapshot(snap)
+    setStatus('done')
   }, [status, prepare, client])
 
   useEffect(() => () => { runningRef.current = false }, [])
