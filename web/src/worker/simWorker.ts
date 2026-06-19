@@ -4,9 +4,14 @@ import { PYODIDE_INDEX_URL, SIM_FILES, simFileUrls } from './paths'
 
 class SimApi {
   private pyodide: any = null
+  private initPromise: Promise<void> | null = null
 
   async init(base: string): Promise<void> {
-    if (this.pyodide) return
+    if (!this.initPromise) this.initPromise = this._doInit(base)
+    return this.initPromise
+  }
+
+  private async _doInit(base: string): Promise<void> {
     // ES 모듈 워커에서는 importScripts 불가 → Pyodide ESM(pyodide.mjs)을 동적 import
     const mod = await import(/* @vite-ignore */ `${PYODIDE_INDEX_URL}pyodide.mjs`)
     this.pyodide = await mod.loadPyodide({ indexURL: PYODIDE_INDEX_URL })
@@ -27,6 +32,7 @@ class SimApi {
   }
 
   private call(expr: string): string {
+    if (!this.pyodide) throw new Error('SimApi.init()를 먼저 호출하세요')
     return this.pyodide.runPython(`webapi.${expr}`) as string
   }
 
