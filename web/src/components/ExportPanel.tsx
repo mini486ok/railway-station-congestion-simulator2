@@ -19,6 +19,16 @@ export function ExportPanel({ sim }: { sim: ReturnType<typeof useSimulation> }) 
     }
   }
 
+  async function exportGroupCsv() {
+    try {
+      await sim.runInstant()
+      const csv = await sim.getClient().exportGroupCsv()
+      saveText('congestion_by_group.csv', csv)
+    } catch (e) {
+      alert(`그룹 혼잡도 CSV 내보내기 실패: ${e}`)
+    }
+  }
+
   async function exportGnn() {
     try {
       await sim.runInstant()
@@ -59,6 +69,7 @@ export function ExportPanel({ sim }: { sim: ReturnType<typeof useSimulation> }) 
       <strong>내보내기 / 설정</strong>
       <div className="row">
         <button onClick={() => void exportCsv()}>혼잡도 CSV</button>
+        <button onClick={() => void exportGroupCsv()}>그룹 혼잡도 CSV</button>
         <button onClick={() => void exportGnn()}>GNN 번들(zip)</button>
         <button onClick={saveConfig}>설정 JSON 저장</button>
         <button onClick={() => fileRef.current?.click()}>설정 불러오기</button>

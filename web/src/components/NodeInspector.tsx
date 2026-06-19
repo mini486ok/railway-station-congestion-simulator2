@@ -63,6 +63,14 @@ export function NodeInspector({ nodeId }: { nodeId: string }) {
       {numField('면적(m²)', node.area, (v) => updateNode(node.id, { area: v }))}
       {numField('기본 체류확률', node.base_stay_prob, (v) => updateNode(node.id, { base_stay_prob: v }))}
       {numField('이탈 가중치(exit)', node.exit_weight ?? 0, (v) => updateNode(node.id, { exit_weight: v }))}
+      <label className="field">
+        <span>그룹(물리적 zone)</span>
+        <input
+          value={node.group ?? ''}
+          placeholder="같은 장소면 동일 이름(빈칸=단독)"
+          onChange={(e) => updateNode(node.id, { group: e.target.value })}
+        />
+      </label>
       {numField('초기 인원', node.initial_population ?? 0, (v) => updateNode(node.id, { initial_population: v }))}
       <label className="field">
         <span>혼잡 동적 체류</span>

@@ -57,7 +57,7 @@ class SimApi {
     return JSON.parse(this.call('validate(_cfg)'))
   }
 
-  async load(text: string): Promise<{ node_ids: string[]; num_steps: number }> {
+  async load(text: string): Promise<{ node_ids: string[]; num_steps: number; groups: string[] }> {
     this.pyodide.globals.set('_cfg', text)
     return JSON.parse(this.call('load(_cfg)'))
   }
@@ -74,6 +74,8 @@ class SimApi {
     this.pyodide.globals.set('_layout', layout)
     return this.call('export_csv(_layout)')
   }
+
+  async exportGroupCsv(): Promise<string> { return this.call('export_group_csv()') }
 
   async exportGnn(): Promise<Record<string, string>> {
     return JSON.parse(this.call('export_gnn()'))
