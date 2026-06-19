@@ -173,4 +173,35 @@ class StationGraph:
             if n.type != NodeType.PLATFORM and n.train is not None:
                 errors.append(f"노드 {n.id}: 열차 설정은 승강장만 가능")
 
+            # PLATFORM 노드 train 필드 상세 검증
+            if n.type == NodeType.PLATFORM and n.train is not None:
+                train = n.train
+                if train.headway_sec <= 0:
+                    errors.append(f"노드 {n.id}: 배차간격(headway)은 0보다 커야 함")
+                if train.first_arrival_sec < 0:
+                    errors.append(f"노드 {n.id}: first_arrival_sec는 0 이상이어야 함")
+                if train.capacity < 0:
+                    errors.append(f"노드 {n.id}: capacity(열차 정원)는 0 이상이어야 함")
+
+        # 그룹 일관성 검사 (group 필드가 비어 있지 않은 노드만 대상)
+        from collections import defaultdict
+        group_nodes: dict[str, list[Node]] = defaultdict(list)
+        for n in self.nodes:
+            if n.group:
+                group_nodes[n.group].append(n)
+
+        for g, members in group_nodes.items():
+            # 한 그룹에 PLATFORM이 2개 이상이면 오류
+            platform_count = sum(1 for m in members if m.type == NodeType.PLATFORM)
+            if platform_count >= 2:
+                errors.append(
+                    f"그룹 '{g}': 한 그룹에 승강장이 2개 이상이면 열차 하차가 중복 계산됩니다"
+                )
+            # 그룹 내 congestion_enabled 혼재 → 오류
+            congestion_values = {m.congestion_enabled for m in members}
+            if len(congestion_values) > 1:
+                errors.append(
+                    f"그룹 '{g}': 그룹 내 노드의 '혼잡 동적 체류' 설정이 일치해야 합니다"
+                )
+
         return errors

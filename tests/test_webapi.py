@@ -98,3 +98,45 @@ def test_export_group_csv():
     assert lines[0].startswith("step,time_sec,"), f"헤더 오류: {lines[0]}"
     # 노드가 2개이고 group 없으므로 컬럼은 step,time_sec,A,B
     assert lines[0] == "step,time_sec,A,B", f"헤더 오류: {lines[0]}"
+
+
+# FIX 2: config 유효성 검사 (dt_seconds/duration_seconds <= 0)
+def test_load_raises_on_zero_dt():
+    """dt_seconds=0 이면 load()가 ValueError를 발생시켜야 한다."""
+    import pytest
+    with pytest.raises(ValueError, match="dt_seconds"):
+        webapi.load(_cfg_text(duration=20.0, dt=0.0))
+
+
+def test_load_raises_on_negative_dt():
+    """dt_seconds<0 이면 load()가 ValueError를 발생시켜야 한다."""
+    import pytest
+    with pytest.raises(ValueError, match="dt_seconds"):
+        webapi.load(_cfg_text(duration=20.0, dt=-1.0))
+
+
+def test_load_raises_on_zero_duration():
+    """duration_seconds=0 이면 load()가 ValueError를 발생시켜야 한다."""
+    import pytest
+    with pytest.raises(ValueError, match="duration_seconds"):
+        webapi.load(_cfg_text(duration=0.0, dt=5.0))
+
+
+# FIX 3: _require_engine RuntimeError (load() 호출 전 step/run_all 등 호출)
+def test_step_without_load_raises_runtime_error():
+    """load() 없이 step() 호출 시 RuntimeError를 발생시켜야 한다."""
+    import importlib
+    import sim.webapi as _wapi
+    _wapi._engine = None  # 강제로 None
+    import pytest
+    with pytest.raises(RuntimeError, match="load"):
+        _wapi.step(1)
+
+
+def test_run_all_without_load_raises_runtime_error():
+    """load() 없이 run_all() 호출 시 RuntimeError를 발생시켜야 한다."""
+    import sim.webapi as _wapi
+    _wapi._engine = None
+    import pytest
+    with pytest.raises(RuntimeError, match="load"):
+        _wapi.run_all()

@@ -7,11 +7,26 @@ from dataclasses import asdict, fields
 from sim.model import StationGraph, SimConfig
 
 
+def _csv_field(value) -> str:
+    """사용자 제어 문자열을 CSV-안전하게 이스케이프한다.
+
+    - =, +, -, @ 로 시작하면 앞에 apostrophe 추가(수식 주입 방지)
+    - 콤마, 큰따옴표, 개행 포함 시 RFC-4180 따옴표 처리
+    - 특수문자 없는 일반 값은 그대로 반환(backward-compat)
+    """
+    s = str(value)
+    if s and s[0] in ('=', '+', '-', '@'):
+        s = "'" + s
+    if any(c in s for c in (',', '"', '\n', '\r')):
+        s = '"' + s.replace('"', '""') + '"'
+    return s
+
+
 def history_to_csv(history: np.ndarray, node_ids: list[str],
                    dt_seconds: float, layout: str = "wide") -> str:
     rows = []
     if layout == "wide":
-        rows.append(",".join(["step", "time_sec"] + list(node_ids)))
+        rows.append(",".join(["step", "time_sec"] + [_csv_field(nid) for nid in node_ids]))
         for t in range(history.shape[0]):
             vals = [str(t), str(t * dt_seconds)]
             vals += [str(float(history[t, j])) for j in range(len(node_ids))]
@@ -20,7 +35,7 @@ def history_to_csv(history: np.ndarray, node_ids: list[str],
         rows.append("step,time_sec,node,congestion")
         for t in range(history.shape[0]):
             for j, nid in enumerate(node_ids):
-                rows.append(f"{t},{t * dt_seconds},{nid},{float(history[t, j])}")
+                rows.append(f"{t},{t * dt_seconds},{_csv_field(nid)},{float(history[t, j])}")
     else:
         raise ValueError(f"알 수 없는 layout: {layout}")
     return "\n".join(rows) + "\n"
@@ -40,14 +55,21 @@ def gnn_bundle(graph: StationGraph) -> dict[str, str]:
         tt[i][j] = int(l.travel_time)
 
     def matrix_csv(mat) -> str:
-        rows = ["," + ",".join(ids)]
+        escaped_ids = [_csv_field(nid) for nid in ids]
+        rows = ["," + ",".join(escaped_ids)]
         for i, nid in enumerate(ids):
-            rows.append(nid + "," + ",".join(str(v) for v in mat[i]))
+            rows.append(_csv_field(nid) + "," + ",".join(str(v) for v in mat[i]))
         return "\n".join(rows) + "\n"
 
     feat_rows = ["id,name,type,area,group"]
     for node in graph.nodes:
-        feat_rows.append(f"{node.id},{node.name},{node.type.value},{float(node.area)},{node.group}")
+        feat_rows.append(",".join([
+            _csv_field(node.id),
+            _csv_field(node.name),
+            _csv_field(node.type.value),   # enum value: 안전하지만 일관성 위해 통과
+            str(float(node.area)),          # 숫자: 그대로
+            _csv_field(node.group),
+        ]))
 
     return {
         "adjacency": matrix_csv(adj),
@@ -77,7 +99,7 @@ def history_by_group(history: np.ndarray, node_ids: list[str],
     num_steps = history.shape[0]
     num_unique = len(unique_groups)
 
-    rows = [",".join(["step", "time_sec"] + unique_groups)]
+    rows = [",".join(["step", "time_sec"] + [_csv_field(g) for g in unique_groups])]
     for t in range(num_steps):
         group_sum = np.zeros(num_unique, dtype=float)
         for j, key in enumerate(eff_groups):
