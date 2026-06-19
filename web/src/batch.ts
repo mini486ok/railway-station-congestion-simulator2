@@ -35,7 +35,7 @@ export function buildRunConfigs(base: ProjectConfig, spec: BatchSpec): ProjectCo
       const [lo, hi] = spec.varyEntranceRate
       const r = lo + rnd() * (hi - lo)
       for (const n of cfg.graph.nodes) {
-        if (n.type === 'entrance' && n.generation && (n.generation.kind === 'poisson' || n.generation.kind === 'constant')) {
+        if (n.type === 'entrance' && n.generation && (n.generation.kind === 'poisson' || n.generation.kind === 'constant' || n.generation.kind === 'batch')) {
           n.generation.rate = r
         }
       }

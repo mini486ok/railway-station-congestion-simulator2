@@ -28,13 +28,27 @@ describe('validateGraph', () => {
     expect(validateGraph(g).some((e) => e.includes('가중치 합'))).toBe(true)
   })
 
-  it('flags generation on non-source type', () => {
+  it('flags generation on non-entrance type (passage)', () => {
     const g = okGraph()
     const c = makeNode('passage', 'C')
     c.base_stay_prob = 1.0
     c.generation = { kind: 'constant', rate: 1.0 }
     g.nodes.push(c)
-    expect(validateGraph(g).some((e) => e.includes('발생'))).toBe(true)
+    expect(validateGraph(g).some((e) => e.includes('발생(generation)은 출입구에서만 가능합니다'))).toBe(true)
+  })
+
+  it('flags generation on platform (entrance-only rule)', () => {
+    const g = okGraph()
+    const p = g.nodes.find((n) => n.type === 'platform')!
+    p.generation = { kind: 'poisson', rate: 1.0 }
+    expect(validateGraph(g).some((e) => e.includes('발생(generation)은 출입구에서만 가능합니다'))).toBe(true)
+  })
+
+  it('allows generation on entrance', () => {
+    const g = okGraph()
+    const a = g.nodes.find((n) => n.type === 'entrance')!
+    a.generation = { kind: 'poisson', rate: 1.0 }
+    expect(validateGraph(g).filter((e) => e.includes('발생(generation)은 출입구에서만 가능합니다'))).toHaveLength(0)
   })
 
   it('flags platform without train', () => {
@@ -146,11 +160,18 @@ describe('validateGraph', () => {
     expect(validateGraph(g).some((e) => e.includes('발생률(rate)'))).toBe(false)
   })
 
-  it('flags normal_pulse sigma_sec = 0', () => {
+  it('flags batch generation with batch_size <= 0', () => {
     const g = okGraph()
     const a = g.nodes.find((n) => n.type === 'entrance')!
-    a.generation = { kind: 'normal_pulse', sigma_sec: 0, total: 100 }
-    expect(validateGraph(g).some((e) => e.includes('sigma_sec는 0보다 커야 함'))).toBe(true)
+    a.generation = { kind: 'batch', rate: 1.0, batch_size: 0 }
+    expect(validateGraph(g).some((e) => e.includes('군집 크기(batch_size)는 0보다 커야 함'))).toBe(true)
+  })
+
+  it('allows batch generation with valid batch_size', () => {
+    const g = okGraph()
+    const a = g.nodes.find((n) => n.type === 'entrance')!
+    a.generation = { kind: 'batch', rate: 1.0, batch_size: 5 }
+    expect(validateGraph(g).some((e) => e.includes('군집 크기(batch_size)'))).toBe(false)
   })
 
   it('flags malformed profile (negative time)', () => {
@@ -158,5 +179,15 @@ describe('validateGraph', () => {
     const a = g.nodes.find((n) => n.type === 'entrance')!
     a.generation = { kind: 'constant', rate: 1, profile: [[-10, 2], [50, 5]] }
     expect(validateGraph(g).some((e) => e.includes('발생 profile 형식이 올바르지 않음'))).toBe(true)
+  })
+
+  it('makeNode platform has generation === null', () => {
+    const p = makeNode('platform', 'P1')
+    expect(p.generation).toBeNull()
+  })
+
+  it('makeNode entrance has generation.kind === poisson', () => {
+    const e = makeNode('entrance', 'E1')
+    expect(e.generation?.kind).toBe('poisson')
   })
 })

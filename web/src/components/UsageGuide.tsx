@@ -228,7 +228,7 @@ export function UsageGuide() {
         </li>
         <li>
           <strong>첨두 혼잡 시나리오 역</strong> — 12노드.
-          높은 발생률(5/s)과 normal_pulse 이벤트 입구, 좁은 게이트로 <strong>병목 혼잡</strong>을 연출합니다.
+          높은 발생률(5/s)과 시간가변 profile(첨두 급증) 이벤트 입구, 좁은 게이트로 <strong>병목 혼잡</strong>을 연출합니다.
         </li>
         <li>
           <strong>통근 첨두 패턴 역</strong> — 14노드.

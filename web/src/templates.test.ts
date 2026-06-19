@@ -49,10 +49,10 @@ describe('templates', () => {
     expect(t!.project.graph.nodes.some((n) => n.type === 'elevator')).toBe(true)
   })
 
-  it('peak congestion station has normal_pulse generation', () => {
+  it('peak congestion station uses time-varying profile generation (T8 normal_pulse replaced)', () => {
     const t = SAMPLE_TEMPLATES.find((t) => t.name === '첨두 혼잡 시나리오 역')
     expect(t).toBeDefined()
-    expect(t!.project.graph.nodes.some((n) => n.generation?.kind === 'normal_pulse')).toBe(true)
+    expect(t!.project.graph.nodes.some((n) => n.generation?.profile != null && n.generation.profile.length > 0)).toBe(true)
   })
 
   it('at least one template uses a generation profile (time-varying)', () => {

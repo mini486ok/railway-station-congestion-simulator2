@@ -732,7 +732,7 @@ function peakCongestionStation(): ProjectConfig {
 
   const e2i = mk('entrance', 'pk_e2i', '이벤트 입구', 'pk_출입구2', {
     area: 30, base_stay_prob: 0.2, exit_weight: 0,
-    generation: { kind: 'normal_pulse', center_sec: 600, sigma_sec: 120, total: 2000 },
+    generation: { kind: 'poisson', rate: 0.5, profile: [[0, 0.5], [300, 4.0], [600, 5.0], [900, 2.0], [1500, 0.5]] },
   })
   const e2o = mk('entrance', 'pk_e2o', '이벤트 출구', 'pk_출입구2', { area: 30, base_stay_prob: 0.2, exit_weight: 1.0, generation: null })
 

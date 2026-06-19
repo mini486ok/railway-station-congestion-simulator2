@@ -27,7 +27,7 @@ export function NodeInspector({ nodeId }: { nodeId: string }) {
   const removeNode = useStore((s) => s.removeNode)
   if (!node) return null
 
-  const isSource = node.type === 'entrance' || node.type === 'platform'
+  const isEntrance = node.type === 'entrance'
   const gen: GenerationConfig = node.generation ?? { kind: 'poisson', rate: 1.0 }
   const train: TrainConfig = node.train ?? {
     first_arrival_sec: 60, headway_sec: 300, jitter_sigma_sec: 0,
@@ -55,13 +55,10 @@ export function NodeInspector({ nodeId }: { nodeId: string }) {
           onChange={(e) => {
             const t = e.target.value as NodeType
             const toElev = t === 'elevator'
-            const isSourceType = t === 'entrance' || t === 'platform'
-            // Restore a sensible default generation when switching TO a source type and none exists
-            const newGeneration = toElev
-              ? null
-              : isSourceType
-                ? (node.generation ?? { kind: 'poisson' as const, rate: 1.0 })
-                : null
+            // Generation is allowed ONLY on entrance nodes
+            const newGeneration = t === 'entrance'
+              ? (node.generation ?? { kind: 'poisson' as const, rate: 1.0 })
+              : null
             updateNode(node.id, {
               type: t,
               generation: newGeneration,
@@ -108,7 +105,7 @@ export function NodeInspector({ nodeId }: { nodeId: string }) {
         </fieldset>
       )}
 
-      {isSource && node.type !== 'elevator' && (
+      {isEntrance && (
         <fieldset>
           <legend>발생 설정</legend>
           <label className="field">
@@ -117,19 +114,75 @@ export function NodeInspector({ nodeId }: { nodeId: string }) {
               value={gen.kind}
               onChange={(e) => updateNode(node.id, { generation: { ...gen, kind: e.target.value as GenerationConfig['kind'] } })}
             >
-              <option value="constant">상수</option>
-              <option value="poisson">Poisson</option>
-              <option value="normal_pulse">정규 펄스</option>
-              <option value="none">없음</option>
+              <option value="constant">상수(constant)</option>
+              <option value="poisson">Poisson(poisson)</option>
+              <option value="batch">군집·배치(batch)</option>
+              <option value="none">없음(none)</option>
             </select>
           </label>
           {(gen.kind === 'constant' || gen.kind === 'poisson') &&
             numField('발생률(인/초)', gen.rate ?? 0, (v) => updateNode(node.id, { generation: { ...gen, rate: v } }), 'gen_rate')}
-          {gen.kind === 'normal_pulse' && (
+          {gen.kind === 'batch' && (
             <>
-              {numField('중심시각(초)', gen.center_sec ?? 0, (v) => updateNode(node.id, { generation: { ...gen, center_sec: v } }), 'gen_center')}
-              {numField('표준편차(초)', gen.sigma_sec ?? 1, (v) => updateNode(node.id, { generation: { ...gen, sigma_sec: v } }), 'gen_sigma')}
-              {numField('총 인원', gen.total ?? 0, (v) => updateNode(node.id, { generation: { ...gen, total: v } }), 'gen_total')}
+              {numField('배치 도착률(배치/초)', gen.rate ?? 0, (v) => updateNode(node.id, { generation: { ...gen, rate: v } }), 'gen_rate')}
+              {numField('군집 크기(인/배치)', gen.batch_size ?? 10, (v) => updateNode(node.id, { generation: { ...gen, batch_size: v } }), 'gen_batch_size')}
+            </>
+          )}
+          {gen.kind !== 'none' && (
+            <>
+              <label className="field">
+                <span>시간가변 발생률(profile)<InfoTip text={PARAM_HELP.gen_profile} /></span>
+                <input
+                  type="checkbox"
+                  checked={Array.isArray(gen.profile) && gen.profile.length > 0}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      updateNode(node.id, { generation: { ...gen, profile: [[0, gen.rate ?? 1]] } })
+                    } else {
+                      updateNode(node.id, { generation: { ...gen, profile: null } })
+                    }
+                  }}
+                />
+              </label>
+              {Array.isArray(gen.profile) && gen.profile.length > 0 && (
+                <div className="profile-editor">
+                  {gen.profile.map((row, i) => (
+                    <div key={i} className="profile-row">
+                      <input
+                        type="number"
+                        value={row[0]}
+                        placeholder="시각(초)"
+                        onChange={(e) => {
+                          const newProfile = gen.profile!.map((r, j) => j === i ? [parseFloat(e.target.value), r[1]] as [number, number] : r)
+                          updateNode(node.id, { generation: { ...gen, profile: newProfile } })
+                        }}
+                      />
+                      <input
+                        type="number"
+                        value={row[1]}
+                        placeholder="발생률"
+                        onChange={(e) => {
+                          const newProfile = gen.profile!.map((r, j) => j === i ? [r[0], parseFloat(e.target.value)] as [number, number] : r)
+                          updateNode(node.id, { generation: { ...gen, profile: newProfile } })
+                        }}
+                      />
+                      <button
+                        onClick={() => {
+                          const newProfile = gen.profile!.filter((_, j) => j !== i)
+                          updateNode(node.id, { generation: { ...gen, profile: newProfile.length > 0 ? newProfile : null } })
+                        }}
+                      >삭제</button>
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => {
+                      const last = gen.profile![gen.profile!.length - 1]
+                      const newProfile = [...gen.profile!, [last[0] + 600, last[1]] as [number, number]]
+                      updateNode(node.id, { generation: { ...gen, profile: newProfile } })
+                    }}
+                  >+ 구간 추가</button>
+                </div>
+              )}
             </>
           )}
         </fieldset>
