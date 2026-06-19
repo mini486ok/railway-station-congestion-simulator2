@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildSeries } from './chartData'
+import { buildSeries, buildGroupSeries } from './chartData'
 import type { Snapshot } from './types'
 
 const hist: Snapshot[] = [
@@ -18,5 +18,21 @@ describe('buildSeries', () => {
   })
   it('returns empty for empty history', () => {
     expect(buildSeries([])).toEqual([])
+  })
+})
+
+describe('buildGroupSeries', () => {
+  it('sums node populations per group', () => {
+    const hist = [
+      { t:0, time_sec:0, N:[1,2,3], node_ids:['A','B','C'], total_generated:0, total_exited:0 },
+      { t:1, time_sec:5, N:[4,5,6], node_ids:['A','B','C'], total_generated:0, total_exited:0 },
+    ]
+    const s = buildGroupSeries(hist as never, ['Z','Z','C'])
+    expect(s.map(x=>x.node)).toEqual(['Z','C'])
+    expect(s[0].y).toEqual([3,9])   // Z=A+B
+    expect(s[1].y).toEqual([3,6])   // C
+  })
+  it('falls back to per-node when no groups', () => {
+    expect(buildGroupSeries([], [])).toEqual([])
   })
 })

@@ -28,6 +28,7 @@ export function useSimulation(opts: Options = {}) {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
   const [history, setHistory] = useState<Snapshot[]>([])
   const [numSteps, setNumSteps] = useState(0)
+  const [nodeGroups, setNodeGroups] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
   const [speed, setSpeed] = useState(10) // steps/sec
   const runningRef = useRef(false)
@@ -59,6 +60,7 @@ export function useSimulation(opts: Options = {}) {
       await ensureInit()
       const info = await client().load(JSON.stringify(project))
       setNumSteps(info.num_steps)
+      setNodeGroups(info.groups ?? [])
       numStepsRef.current = info.num_steps
       const snap = await client().snapshot()
       setSnapshot(snap); setHistory([snap]); setStatus('ready')
@@ -128,7 +130,7 @@ export function useSimulation(opts: Options = {}) {
   useEffect(() => () => { runningRef.current = false }, [])
 
   return {
-    status, snapshot, history, numSteps, error, speed,
+    status, snapshot, history, numSteps, nodeGroups, error, speed,
     progress: computeProgress(snapshot?.t ?? 0, numSteps),
     prepare, play, pause, stepOnce, reset, runInstant, setSpeed,
     getClient: client,
