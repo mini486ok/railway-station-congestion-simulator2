@@ -17,7 +17,7 @@ export function UsageGuide() {
         <li><strong>통로(Corridor)</strong>: 승객이 지나가는 복도·통로</li>
         <li><strong>계단(Stairs)</strong>: 층간 이동 계단</li>
         <li><strong>에스컬레이터(Escalator)</strong>: 에스컬레이터</li>
-        <li><strong>엘리베이터(Elevator)</strong>: 엘리베이터</li>
+        <li><strong>엘리베이터(Elevator)</strong>: 엘리베이터 (용량·속력 기반 배치 운송)</li>
         <li><strong>게이트(Gate)</strong>: 개찰구·검표 게이트</li>
         <li><strong>승강장(Platform)</strong>: 열차 탑승 승강장</li>
       </ul>
@@ -73,7 +73,41 @@ export function UsageGuide() {
         <li>그룹별 혼잡도는 별도 CSV 파일로 내보낼 수 있습니다</li>
       </ul>
 
-      <h3>6. 시뮬레이션 실행</h3>
+      <h3>5-1. 2노드/그룹 모델링 규칙</h3>
+      <p>
+        물리적으로 하나의 공간이라도 <strong>입력 방향과 출력 방향을 분리해 2개의 노드로 만들고</strong>,
+        두 노드에 <strong>같은 '그룹' 이름</strong>을 부여하는 것이 권장 방식입니다.
+      </p>
+      <ul>
+        <li>예: 입구/출구 노드 쌍 → 그룹="출입구1"</li>
+        <li>예: 게이트 양방향 노드 쌍 → 그룹="게이트1"</li>
+        <li>예: 승강장 승차/하차 노드 쌍 → 그룹="승강장1"</li>
+        <li>예: 엘리베이터 양방향 노드 쌍 → 그룹="엘리베이터1"</li>
+      </ul>
+      <p>
+        같은 그룹에 속한 노드들의 혼잡도(인원수)는 합산되어 Weidmann 모델의 밀도 계산에 사용됩니다.
+        각 노드 면적은 물리 공간 전체를 두 노드로 분할한 값으로 입력하세요.
+      </p>
+      <p>
+        승강장은 <strong>승차 노드</strong>(<code>train.mode=board</code>, <code>base_stay_prob=1.0</code>)와
+        <strong>하차 노드</strong>(<code>train.mode=alight</code>)로 나누고 동일한 배차·그룹으로 묶습니다.
+        승차 노드는 출력 링크가 없으므로 <code>base_stay_prob=1.0</code>이어야 합니다
+        (열차가 올 때까지 승객이 대기).
+      </p>
+
+      <h3>6. 엘리베이터</h3>
+      <p>
+        엘리베이터 노드는 <strong>용량(capacity)</strong>과 <strong>속력(speed)</strong> 기반의 배치(batch) 운송 모델을 사용합니다.
+      </p>
+      <ul>
+        <li><strong>speed</strong> (슬롯 주기): 매 <code>speed</code> 스텝마다 한 번 운행합니다.</li>
+        <li><strong>capacity</strong>: 운행 1회에 최대 <code>capacity</code>명까지 이동합니다.</li>
+        <li>운행 사이에는 엘리베이터 노드에서 대기합니다.</li>
+        <li>혼잡도 동적 체류는 적용되지 않습니다 (<code>congestion_enabled=false</code>).</li>
+        <li>2노드/그룹 규칙에 따라 '승강장방향' 노드와 '출구방향' 노드를 같은 그룹으로 묶습니다.</li>
+      </ul>
+
+      <h3>7. 시뮬레이션 실행</h3>
       <p>
         가운데 제어판에서 다음 설정 후 시뮬레이션을 시작합니다.
       </p>
@@ -93,7 +127,7 @@ export function UsageGuide() {
         <li><strong>배속 슬라이더</strong>: 재생 속도 조절</li>
       </ul>
 
-      <h3>7. 결과 보기</h3>
+      <h3>8. 결과 보기</h3>
       <p>
         시뮬레이션 실행 후 대시보드에서 결과를 확인합니다.
       </p>
@@ -105,7 +139,7 @@ export function UsageGuide() {
         <li><strong>누적 이탈</strong>: 시뮬레이션 시작 이후 역사를 벗어난 총 승객 수</li>
       </ul>
 
-      <h3>8. 내보내기</h3>
+      <h3>9. 내보내기</h3>
       <p>
         시뮬레이션 결과와 설정을 다양한 형식으로 저장할 수 있습니다.
       </p>
@@ -120,15 +154,17 @@ export function UsageGuide() {
         ZIP으로 한 번에 저장하여 대량 학습데이터를 생성할 수 있습니다.
       </p>
 
-      <h3>9. 템플릿</h3>
+      <h3>10. 템플릿</h3>
       <p>
         상단 드롭다운에서 예제 템플릿을 불러오거나,
         현재 구성을 <strong>"현재 구성을 템플릿으로 저장"</strong> 버튼으로 저장하여
         나중에 재사용할 수 있습니다.
       </p>
       <ul>
-        <li>기본 예제: 미리 준비된 역사 구성 예제</li>
+        <li>기본 예제: 미리 준비된 역사 구성 예제 (2노드/그룹 규칙 적용)</li>
         <li>내 템플릿: 사용자가 직접 저장한 구성 (브라우저 localStorage에 저장)</li>
+        <li><strong>이 예제 숨기기</strong>: 기본 예제 선택 후 클릭하면 드롭다운에서 숨겨집니다.</li>
+        <li><strong>숨긴 예제 복원</strong>: 숨긴 예제가 있을 때 나타나며, 모두 복원합니다.</li>
       </ul>
     </div>
   )
