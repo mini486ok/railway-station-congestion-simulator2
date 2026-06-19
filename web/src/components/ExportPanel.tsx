@@ -10,21 +10,29 @@ export function ExportPanel({ sim }: { sim: ReturnType<typeof useSimulation> }) 
   const fileRef = useRef<HTMLInputElement>(null)
 
   async function exportCsv() {
-    await sim.runInstant()
-    const csv = await sim.getClient().exportCsv('wide')
-    saveText('congestion_timeseries.csv', csv)
+    try {
+      await sim.runInstant()
+      const csv = await sim.getClient().exportCsv('wide')
+      saveText('congestion_timeseries.csv', csv)
+    } catch (e) {
+      alert(`CSV 내보내기 실패: ${e}`)
+    }
   }
 
   async function exportGnn() {
-    await sim.runInstant()
-    const bundle = await sim.getClient().exportGnn()
-    const files: Record<string, string> = {
-      'adjacency.csv': bundle.adjacency,
-      'distance.csv': bundle.distance,
-      'travel_time.csv': bundle.travel_time,
-      'node_features.csv': bundle.node_features,
+    try {
+      await sim.runInstant()
+      const bundle = await sim.getClient().exportGnn()
+      const files: Record<string, string> = {
+        'adjacency.csv': bundle.adjacency,
+        'distance.csv': bundle.distance,
+        'travel_time.csv': bundle.travel_time,
+        'node_features.csv': bundle.node_features,
+      }
+      saveBlob('gnn_bundle.zip', await bundleToZip(files))
+    } catch (e) {
+      alert(`GNN 번들 내보내기 실패: ${e}`)
     }
-    saveBlob('gnn_bundle.zip', await bundleToZip(files))
   }
 
   function saveConfig() {
@@ -41,7 +49,9 @@ export function ExportPanel({ sim }: { sim: ReturnType<typeof useSimulation> }) 
         loadProject(project)
       } catch (err) { alert(`불러오기 실패: ${err}`) }
     }
+    reader.onerror = () => alert('파일 읽기 실패')
     reader.readAsText(file)
+    e.target.value = ''
   }
 
   return (
