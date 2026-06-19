@@ -91,7 +91,8 @@ function basicStation(): ProjectConfig {
   const E_in = makeNode('entrance', 'E_in')
   E_in.name = '1번 입구'; E_in.area = 30; E_in.base_stay_prob = 0.2
   E_in.exit_weight = 0; E_in.group = '출입구1'
-  E_in.generation = { kind: 'poisson', rate: 1.5 }
+  // T1: P_board throughput = 150/300 = 0.5/s. Target inflow ≈ 1.2× = 0.6/s.
+  E_in.generation = { kind: 'poisson', rate: 0.6 }
 
   const E_out = makeNode('entrance', 'E_out')
   E_out.name = '1번 출구'; E_out.area = 30; E_out.base_stay_prob = 0.2
@@ -142,7 +143,8 @@ function elevatorStation(): ProjectConfig {
   const E_in = makeNode('entrance', 'E_in')
   E_in.name = '1번 입구'; E_in.area = 30; E_in.base_stay_prob = 0.2
   E_in.exit_weight = 0; E_in.group = '출입구1'
-  E_in.generation = { kind: 'poisson', rate: 1.5 }
+  // T2: P_board throughput = 150/300 = 0.5/s. Target ≈ 1.2× = 0.6/s.
+  E_in.generation = { kind: 'poisson', rate: 0.6 }
 
   const E_out = makeNode('entrance', 'E_out')
   E_out.name = '1번 출구'; E_out.area = 30; E_out.base_stay_prob = 0.2
@@ -186,12 +188,13 @@ function elevatorStation(): ProjectConfig {
     mode: 'alight',
   }
 
+  // Elevator mode share ≈10% (accessibility use), stairs/direct path 90%.
   const l1 = makeLink('E_in', 'G_in'); l1.distance = 30; l1.weight = 1.0
-  const l2 = makeLink('G_in', 'P_board'); l2.distance = 40; l2.weight = 0.7
-  const l3 = makeLink('G_in', 'EL_up'); l3.distance = 15; l3.weight = 0.3
+  const l2 = makeLink('G_in', 'P_board'); l2.distance = 40; l2.weight = 0.9
+  const l3 = makeLink('G_in', 'EL_up'); l3.distance = 15; l3.weight = 0.1
   const l4 = makeLink('EL_up', 'P_board'); l4.distance = 15; l4.weight = 1.0
-  const l5 = makeLink('P_alight', 'G_out'); l5.distance = 40; l5.weight = 0.7
-  const l6 = makeLink('P_alight', 'EL_dn'); l6.distance = 15; l6.weight = 0.3
+  const l5 = makeLink('P_alight', 'G_out'); l5.distance = 40; l5.weight = 0.9
+  const l6 = makeLink('P_alight', 'EL_dn'); l6.distance = 15; l6.weight = 0.1
   const l7 = makeLink('EL_dn', 'G_out'); l7.distance = 15; l7.weight = 1.0
   const l8 = makeLink('G_out', 'E_out'); l8.distance = 30; l8.weight = 1.0
 
@@ -211,7 +214,9 @@ function transferStation(): ProjectConfig {
   const E_in = makeNode('entrance', 'E_in')
   E_in.name = '1번 입구'; E_in.area = 30; E_in.base_stay_prob = 0.2
   E_in.exit_weight = 0; E_in.group = '출입구1'
-  E_in.generation = { kind: 'poisson', rate: 1.5 }
+  // T3: P1_board=150/300=0.5/s, P2_board=180/240=0.75/s, total=1.25/s.
+  // 60:40 split → P1 receives 0.6/s (1.2× cap), P2 receives 0.4/s (0.53× cap). Aggregate 1.0 < 1.25.
+  E_in.generation = { kind: 'poisson', rate: 1.0 }
 
   const E_out = makeNode('entrance', 'E_out')
   E_out.name = '1번 출구'; E_out.area = 30; E_out.base_stay_prob = 0.2
@@ -240,9 +245,10 @@ function transferStation(): ProjectConfig {
   const P1_alight = makeNode('platform', 'P1_alight')
   P1_alight.name = '1호선 승강장(하차)'; P1_alight.area = 100; P1_alight.base_stay_prob = 0.15
   P1_alight.exit_weight = 0; P1_alight.group = '승강장1'
+  // alight_kind='normal' with alight_std>0 to demonstrate variable alighting in deterministic mode (item C)
   P1_alight.train = {
     first_arrival_sec: 60, headway_sec: 300, jitter_sigma_sec: 5,
-    capacity: 0, alight_kind: 'poisson', alight_mean: 60, alight_std: 0,
+    capacity: 0, alight_kind: 'normal', alight_mean: 60, alight_std: 15,
     mode: 'alight',
   }
 
@@ -311,7 +317,8 @@ function multiEntranceStation(): ProjectConfig {
   const E1_in = makeNode('entrance', 'E1_in')
   E1_in.name = '1번 입구'; E1_in.area = 30; E1_in.base_stay_prob = 0.2
   E1_in.exit_weight = 0; E1_in.group = '출입구1'
-  E1_in.generation = { kind: 'poisson', rate: 1.0 }
+  // T4: P_board throughput=150/300=0.5/s. Total target≈1.2×=0.6/s. E1:E2 ≈ 55:45 asymmetry kept.
+  E1_in.generation = { kind: 'poisson', rate: 0.33 }
 
   const E1_out = makeNode('entrance', 'E1_out')
   E1_out.name = '1번 출구'; E1_out.area = 30; E1_out.base_stay_prob = 0.2
@@ -321,7 +328,7 @@ function multiEntranceStation(): ProjectConfig {
   const E2_in = makeNode('entrance', 'E2_in')
   E2_in.name = '2번 입구'; E2_in.area = 30; E2_in.base_stay_prob = 0.2
   E2_in.exit_weight = 0; E2_in.group = '출입구2'
-  E2_in.generation = { kind: 'poisson', rate: 0.8 }
+  E2_in.generation = { kind: 'poisson', rate: 0.27 }
 
   const E2_out = makeNode('entrance', 'E2_out')
   E2_out.name = '2번 출구'; E2_out.area = 30; E2_out.base_stay_prob = 0.2
@@ -376,9 +383,10 @@ function multiEntranceStation(): ProjectConfig {
 // ──────────────────────────────────────────────────────────────────────────────
 function mediumStation(): ProjectConfig {
   // ─ 출입구 ─────────────────────────────────────────────────────────────────
-  const e1i = mk('entrance', 'e1i', '1번 입구', '출입구1', { area: 30, base_stay_prob: 0.2, exit_weight: 0, generation: { kind: 'poisson', rate: 1.5 } })
+  // T5: pb throughput=300/360≈0.83/s. Target inflow≈1.0/s (1.2×). Asymmetry e1i:e2i kept at 3:2.
+  const e1i = mk('entrance', 'e1i', '1번 입구', '출입구1', { area: 30, base_stay_prob: 0.2, exit_weight: 0, generation: { kind: 'poisson', rate: 0.6 } })
   const e1o = mk('entrance', 'e1o', '1번 출구', '출입구1', { area: 30, base_stay_prob: 0.2, exit_weight: 1.0, generation: null })
-  const e2i = mk('entrance', 'e2i', '2번 입구', '출입구2', { area: 30, base_stay_prob: 0.2, exit_weight: 0, generation: { kind: 'poisson', rate: 1.0 } })
+  const e2i = mk('entrance', 'e2i', '2번 입구', '출입구2', { area: 30, base_stay_prob: 0.2, exit_weight: 0, generation: { kind: 'poisson', rate: 0.4 } })
   const e2o = mk('entrance', 'e2o', '2번 출구', '출입구2', { area: 30, base_stay_prob: 0.2, exit_weight: 1.0, generation: null })
 
   // ─ 대합실(콘코스) — 한 쌍이 물리 공간 하나를 나눔 → 각 100㎡ ──────────────
@@ -778,17 +786,20 @@ function peakCongestionStation(): ProjectConfig {
 // Template 9 — 통근 첨두 패턴 역 (time-varying profile, GNN 시계열 시연)
 // ──────────────────────────────────────────────────────────────────────────────
 function commutePeakStation(): ProjectConfig {
+  // T9 (통근 첨두): headway 180s → throughput=250/180≈1.39/s. Peak target≈1.2×=1.67/s.
+  // Profile shape preserved; peak levels scaled down from 4.5/s to ≈1.7/s (was permanent freeze).
+  // Off-peak (0.3+0.2=0.5/s) << throughput → clears quickly. Peak builds then clears within scenario.
   // 출퇴근 패턴: 0-1800s 저밀도, 1800-3600s 첨두, 3600-5400s 첨두 유지, 5400-7200s 급감
   const e1i = mk('entrance', 'cp_e1i', '1번 입구(통근)', 'cp_출입구1', {
     area: 30, base_stay_prob: 0.2, exit_weight: 0,
-    generation: { kind: 'poisson', rate: 0.3, profile: [[0, 0.3], [1800, 2.5], [3600, 2.5], [5400, 0.4]] },
+    generation: { kind: 'poisson', rate: 0.3, profile: [[0, 0.3], [1800, 1.0], [3600, 1.0], [5400, 0.3]] },
   })
   const e1o = mk('entrance', 'cp_e1o', '1번 출구', 'cp_출입구1', {
     area: 30, base_stay_prob: 0.2, exit_weight: 1.0, generation: null,
   })
   const e2i = mk('entrance', 'cp_e2i', '2번 입구(통근)', 'cp_출입구2', {
     area: 30, base_stay_prob: 0.2, exit_weight: 0,
-    generation: { kind: 'poisson', rate: 0.2, profile: [[0, 0.3], [1800, 2.0], [3600, 2.0], [5400, 0.3]] },
+    generation: { kind: 'poisson', rate: 0.2, profile: [[0, 0.2], [1800, 0.7], [3600, 0.7], [5400, 0.2]] },
   })
   const e2o = mk('entrance', 'cp_e2o', '2번 출구', 'cp_출입구2', {
     area: 30, base_stay_prob: 0.2, exit_weight: 1.0, generation: null,
@@ -805,13 +816,14 @@ function commutePeakStation(): ProjectConfig {
   const esDn = mk('escalator', 'cp_esDn', '에스컬레이터(하행)', 'cp_에스컬', { area: 8, base_stay_prob: 0.0, exit_weight: 0 })
   const esUp = mk('escalator', 'cp_esUp', '에스컬레이터(상행)', 'cp_에스컬', { area: 8, base_stay_prob: 0.0, exit_weight: 0 })
 
+  // headway_sec=180 (첨두 배차 단축) → throughput=250/180≈1.39/s. alight_mean raised to 120 for turnover.
   const pb = mk('platform', 'cp_pb', '승강장(승차)', 'cp_승강장', {
     area: 150, base_stay_prob: 1.0, exit_weight: 0,
-    train: { first_arrival_sec: 60, headway_sec: 300, jitter_sigma_sec: 10, capacity: 300, alight_kind: 'constant', alight_mean: 0, alight_std: 0, mode: 'board' },
+    train: { first_arrival_sec: 60, headway_sec: 180, jitter_sigma_sec: 10, capacity: 250, alight_kind: 'constant', alight_mean: 0, alight_std: 0, mode: 'board' },
   })
   const pa = mk('platform', 'cp_pa', '승강장(하차)', 'cp_승강장', {
     area: 150, base_stay_prob: 0.15, exit_weight: 0,
-    train: { first_arrival_sec: 60, headway_sec: 300, jitter_sigma_sec: 10, capacity: 0, alight_kind: 'poisson', alight_mean: 100, alight_std: 0, mode: 'alight' },
+    train: { first_arrival_sec: 60, headway_sec: 180, jitter_sigma_sec: 10, capacity: 0, alight_kind: 'poisson', alight_mean: 120, alight_std: 0, mode: 'alight' },
   })
 
   const nodes = [e1i, e1o, e2i, e2o, ci, co, gi, go_, stDn, stUp, esDn, esUp, pb, pa]
