@@ -11,20 +11,35 @@ export function Dashboard({ sim }: { sim: ReturnType<typeof useSimulation> }) {
   const storeNodes = useStore((s) => s.nodes)
   const nameMap: Record<string, string> = Object.fromEntries(storeNodes.map((n) => [n.id, n.name]))
 
+  // Auto-set allHidden=true when a large run first populates history
+  const prevSeriesCount = useRef(0)
+  useEffect(() => {
+    const series = byGroup ? buildGroupSeries(sim.history, sim.nodeGroups) : buildSeries(sim.history, nameMap)
+    if (series.length > 14 && prevSeriesCount.current <= 14 && sim.history.length > 1) {
+      setAllHidden(true)
+    }
+    prevSeriesCount.current = series.length
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sim.history.length, byGroup])
+
   // FIX G: data-update effect — NO purge in cleanup (prevents zoom/legend reset on every update)
   useEffect(() => {
     if (!ref.current) return
     const node = ref.current
     const series = byGroup ? buildGroupSeries(sim.history, sim.nodeGroups) : buildSeries(sim.history, nameMap)
+    const manyNodes = series.length > 14
     const traces = series.map((s) => ({
       x: s.x, y: s.y, name: s.node, type: 'scatter' as const, mode: 'lines' as const,
       visible: allHidden ? 'legendonly' as const : true as const,
     }))
+    const legendLayout = manyNodes
+      ? { orientation: 'v' as const, x: 1.02, y: 1 }
+      : { orientation: 'h' as const, y: -0.25 }
     ;(Plotly as any).react(node, traces, {
-      margin: { t: 20, r: 10, b: 80, l: 50 },
+      margin: { t: 20, r: manyNodes ? 200 : 10, b: manyNodes ? 40 : 80, l: 50 },
       hovermode: 'x unified',
       height: 460,
-      legend: { orientation: 'h', y: -0.25 },
+      legend: legendLayout,
       xaxis: { title: '시간(초)', rangeslider: { visible: true } },
       yaxis: { title: '혼잡도(인원수)' },
       showlegend: true,
@@ -63,6 +78,11 @@ export function Dashboard({ sim }: { sim: ReturnType<typeof useSimulation> }) {
         <button onClick={() => setAllHidden(false)} className={`toggle-btn${!allHidden ? ' active' : ''}`}>전체 표시</button>
         <button onClick={() => setAllHidden(true)} className={`toggle-btn${allHidden ? ' active' : ''}`}>전체 숨김</button>
         <span style={{ fontSize: '0.78em', color: '#666' }}>범례 클릭으로 개별 노드 표시/숨김, 드래그로 확대, 더블클릭 초기화</span>
+        {storeNodes.length > 14 && (
+          <span style={{ fontSize: '0.78em', color: '#885500', fontWeight: 600 }}>
+            노드가 많습니다 — 범례에서 보고 싶은 노드만 켜세요
+          </span>
+        )}
       </div>
       {/* FIX G: empty state overlay; chart div stays mounted */}
       <div style={{ position: 'relative', width: '100%', height: 460 }}>

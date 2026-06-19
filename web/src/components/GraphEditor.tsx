@@ -1,10 +1,12 @@
 import { useCallback } from 'react'
 import ReactFlow, {
-  Background, Controls, type Connection, type NodeChange,
+  Background, Controls, MiniMap, type Connection, type NodeChange,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { useStore } from '../store'
-import { toFlowNodes, toFlowEdges } from '../graphAdapter'
+import { toFlowNodes, toFlowEdges, computeLayout, TYPE_COLORS } from '../graphAdapter'
+import type { NodeType } from '../types'
+import { NODE_TYPE_LABELS } from '../defaults'
 
 interface Props {
   selectedNodeId: string | null
@@ -20,7 +22,11 @@ export function GraphEditor({ selectedNodeId, selectedLinkIndex, onSelectNode, o
   const setPosition = useStore((s) => s.setPosition)
   const addLink = useStore((s) => s.addLink)
 
-  const rfNodes = toFlowNodes(nodes, positions, selectedNodeId)
+  // Effective positions: auto-layout is base, manually stored positions win
+  const layoutPositions = computeLayout(nodes, links)
+  const effectivePositions = { ...layoutPositions, ...positions }
+
+  const rfNodes = toFlowNodes(nodes, effectivePositions, selectedNodeId)
   const rfEdges = toFlowEdges(links, selectedLinkIndex)
 
   const onNodesChange = useCallback((changes: NodeChange[]) => {
@@ -52,7 +58,24 @@ export function GraphEditor({ selectedNodeId, selectedLinkIndex, onSelectNode, o
       >
         <Background />
         <Controls />
+        <MiniMap
+          nodeColor={(n) => TYPE_COLORS[(nodes.find((x) => x.id === n.id)?.type ?? 'passage') as NodeType]}
+          style={{ background: '#f8f8f8' }}
+        />
       </ReactFlow>
+      {/* Node type color legend */}
+      <div style={{
+        position: 'absolute', bottom: 8, left: 8, background: 'rgba(255,255,255,0.92)',
+        border: '1px solid #ccc', borderRadius: 6, padding: '6px 10px',
+        fontSize: 10, lineHeight: 1.7, pointerEvents: 'none', zIndex: 10,
+      }}>
+        {(Object.entries(TYPE_COLORS) as [NodeType, string][]).map(([type, color]) => (
+          <div key={type} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ display: 'inline-block', width: 12, height: 12, background: color, border: '1px solid #789', borderRadius: 2 }} />
+            <span>{NODE_TYPE_LABELS[type]}</span>
+          </div>
+        ))}
+      </div>
       {/* FIX H: empty-state hint overlay when no nodes exist */}
       {nodes.length === 0 && (
         <div style={{
