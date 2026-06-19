@@ -1560,7 +1560,7 @@ def test_adjacency_matrix():
     b = gnn_bundle(_g())
     lines = b["adjacency"].strip().splitlines()
     assert lines[0] == ",A,B"
-    assert lines[1] == "A,1.0,0.0"   # A->B weight 1
+    assert lines[1] == "A,0.0,1.0"   # A행: A->A=0.0, A->B=1.0(열 순서 [A,B])
     assert lines[2] == "B,0.0,0.0"
 
 
