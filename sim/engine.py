@@ -4,6 +4,7 @@ import numpy as np
 
 from sim.model import StationGraph, SimConfig, NodeType
 from sim.pedestrian import move_probability_vec
+from sim.generation import build_generator
 
 
 class Engine:
@@ -31,6 +32,9 @@ class Engine:
         for l in graph.links:
             si, ti = self._idx[l.source], self._idx[l.target]
             self.out_links[si].append((ti, l.weight, int(l.travel_time)))
+
+        # 노드별 발생자
+        self.generators = [build_generator(nd.generation) for nd in graph.nodes]
 
         self._pending: dict[int, np.ndarray] = {}
         self.t = 0
@@ -67,6 +71,14 @@ class Engine:
         # 이번 스텝이 만드는 N(s+1)에 도착하는 유입(τ=1 포함)
         arrivals = self._pending.pop(s + 1, np.zeros(n))
         newN = newN + arrivals
+
+        # 발생(source): 출입구/승강장 연속 발생
+        for i in range(n):
+            g = self.generators[i].amount(self.t, self.config.dt_seconds,
+                                          self.rng, self.config.stochastic)
+            if g:
+                newN[i] += g
+                self.total_generated += g
 
         self.N = newN
         self.t += 1
