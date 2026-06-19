@@ -65,3 +65,31 @@ def build_generator(cfg: GenerationConfig | None) -> Generator:
     if cfg.kind == "normal_pulse":
         return NormalPulseGenerator(cfg)
     raise ValueError(f"알 수 없는 발생 종류: {cfg.kind}")
+
+
+def train_arrival_steps(cfg: TrainConfig, dt: float, duration_sec: float,
+                        rng, stochastic: bool) -> set[int]:
+    """주기적 배차(+선택적 정규 지터)를 이산 스텝 집합으로 변환."""
+    steps: set[int] = set()
+    t = cfg.first_arrival_sec
+    while t <= duration_sec + 1e-9:
+        jitter = 0.0
+        if stochastic and cfg.jitter_sigma_sec > 0:
+            jitter = float(rng.normal(0.0, cfg.jitter_sigma_sec))
+        arrival = max(0.0, t + jitter)
+        step = int(round(arrival / dt))
+        if 0 <= step <= round(duration_sec / dt):
+            steps.add(step)
+        t += cfg.headway_sec
+    return steps
+
+
+def sample_alight(cfg: TrainConfig, rng, stochastic: bool) -> float:
+    """열차 1대당 하차 인원 표본."""
+    if not stochastic or cfg.alight_kind == "constant":
+        return float(max(cfg.alight_mean, 0.0))
+    if cfg.alight_kind == "poisson":
+        return float(rng.poisson(max(cfg.alight_mean, 0.0)))
+    if cfg.alight_kind == "normal":
+        return float(max(0.0, rng.normal(cfg.alight_mean, cfg.alight_std)))
+    raise ValueError(f"알 수 없는 하차 종류: {cfg.alight_kind}")
