@@ -29,7 +29,7 @@ function persist(get: () => State) {
   try {
     const { nodes, links, config, positions } = get()
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ nodes, links, config, positions }))
-  } catch { /* localStorage 불가 환경 무시 */ }
+  } catch (e) { console.warn('localStorage 접근 실패:', e) }
 }
 
 function loadInitial(): Pick<State, 'nodes' | 'links' | 'config' | 'positions'> {
@@ -43,7 +43,7 @@ function loadInitial(): Pick<State, 'nodes' | 'links' | 'config' | 'positions'> 
         positions: p.positions ?? {},
       }
     }
-  } catch { /* 무시 */ }
+  } catch (e) { console.warn('localStorage 접근 실패:', e) }
   return { nodes: [], links: [], config: defaultSimConfig(), positions: {} }
 }
 

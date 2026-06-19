@@ -3,9 +3,20 @@ import type { useSimulation } from '../useSimulation'
 import { InfoTip } from './InfoTip'
 import { PARAM_HELP } from '../paramHelp'
 
+const STATUS_LABEL: Record<string, string> = {
+  idle: '대기',
+  loading: '초기화 중',
+  ready: '준비됨',
+  running: '실행 중',
+  paused: '일시정지',
+  done: '완료',
+  error: '오류',
+}
+
 export function SimControls({ sim }: { sim: ReturnType<typeof useSimulation> }) {
   const config = useStore((s) => s.config)
   const setConfig = useStore((s) => s.setConfig)
+  const isLoading = sim.status === 'loading'
   return (
     <div className="controls">
       <div className="row">
@@ -33,17 +44,31 @@ export function SimControls({ sim }: { sim: ReturnType<typeof useSimulation> }) 
         </label>
       </div>
       <div className="row">
-        <button onClick={() => void sim.play()} disabled={sim.status === 'running'}>▶ 재생</button>
+        <button onClick={() => void sim.play()} disabled={isLoading || sim.status === 'running'}>▶ 재생</button>
         <button onClick={() => sim.pause()} disabled={sim.status !== 'running'}>⏸ 일시정지</button>
-        <button onClick={() => void sim.stepOnce()}>⏭ 한 스텝</button>
+        <button onClick={() => void sim.stepOnce()} disabled={isLoading}>⏭ 한 스텝</button>
         <button onClick={() => void sim.reset()}>⟲ 리셋</button>
-        <button onClick={() => void sim.runInstant()}>⚡ 즉시 실행</button>
+        <button onClick={() => void sim.runInstant()} disabled={isLoading}>⚡ 즉시 실행</button>
       </div>
-      <div className="row">
-        <progress value={sim.progress} max={1} />
-        <span>{Math.round(sim.progress * 100)}% (status: {sim.status})</span>
-      </div>
-      {sim.error && <pre className="validation err">{sim.error}</pre>}
+      {isLoading ? (
+        <div className="row">
+          <span>⏳ 시뮬레이터(Python 런타임)를 초기화하는 중입니다… 최초 1회 수십 초 걸릴 수 있습니다</span>
+          <progress />
+        </div>
+      ) : (
+        <div className="row">
+          <progress value={sim.progress} max={1} />
+          <span>{Math.round(sim.progress * 100)}% ({STATUS_LABEL[sim.status] ?? sim.status})</span>
+        </div>
+      )}
+      {sim.error && (
+        <div className="row">
+          <pre className="validation err">{sim.error}</pre>
+          {sim.status === 'error' && (
+            <button onClick={() => void sim.retry()}>🔄 재시도</button>
+          )}
+        </div>
+      )}
     </div>
   )
 }

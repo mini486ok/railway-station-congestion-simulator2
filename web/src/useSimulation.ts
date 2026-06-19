@@ -19,6 +19,8 @@ export function errMsg(e: unknown): string {
 export type SimStatus =
   | 'idle' | 'loading' | 'ready' | 'running' | 'paused' | 'done' | 'error'
 
+const TIMEOUT_MS = 120000
+
 interface Options { clientFactory?: () => SimClient }
 
 export function useSimulation(opts: Options = {}) {
@@ -46,7 +48,15 @@ export function useSimulation(opts: Options = {}) {
   const ensureInit = useCallback(async () => {
     if (!initedRef.current) {
       setStatus('loading')
-      await client().init(APP_BASE)
+      await Promise.race([
+        client().init(APP_BASE),
+        new Promise((_, rej) =>
+          setTimeout(
+            () => rej(new Error('Pyodide 로딩 시간 초과 — 네트워크를 확인한 뒤 재시도하세요')),
+            TIMEOUT_MS,
+          )
+        ),
+      ])
       initedRef.current = true
     }
   }, [client])
@@ -105,6 +115,7 @@ export function useSimulation(opts: Options = {}) {
   }, [client, prepare])
 
   const runInstant = useCallback(async () => {
+    runningRef.current = false
     if (status === 'idle' || status === 'error') { const ok = await prepare(); if (!ok) return }
     setStatus('running')
     try {
@@ -127,12 +138,18 @@ export function useSimulation(opts: Options = {}) {
     }
   }, [status, prepare, client])
 
+  const retry = useCallback(async () => {
+    initedRef.current = false
+    setError(null)
+    await prepare()
+  }, [prepare])
+
   useEffect(() => () => { runningRef.current = false }, [])
 
   return {
     status, snapshot, history, numSteps, nodeGroups, error, speed,
     progress: computeProgress(snapshot?.t ?? 0, numSteps),
-    prepare, play, pause, stepOnce, reset, runInstant, setSpeed,
+    prepare, play, pause, stepOnce, reset, runInstant, setSpeed, retry,
     getClient: client,
   }
 }
