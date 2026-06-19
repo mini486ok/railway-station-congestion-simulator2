@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field, asdict, fields
 from enum import Enum
 
@@ -139,6 +140,12 @@ class StationGraph:
 
     def validate(self, tol: float = 1e-6, duration_seconds: float | None = None) -> list[str]:
         errors: list[str] = []
+        # FIX 2: 중복 노드 ID 검사 (가장 먼저 — 이후 로직이 id→node 맵에 의존하므로)
+        seen_ids: set[str] = set()
+        for n in self.nodes:
+            if n.id in seen_ids:
+                errors.append(f"중복된 노드 id: {n.id}")
+            seen_ids.add(n.id)
         ids = {n.id for n in self.nodes}
         out_weight: dict[str, float] = {n.id: 0.0 for n in self.nodes}
         out_count: dict[str, int] = {n.id: 0 for n in self.nodes}
@@ -210,6 +217,11 @@ class StationGraph:
                     errors.append(f"노드 {n.id}: 엘리베이터 노드에는 열차 설정(train)이 불가")
                 if n.generation is not None:
                     errors.append(f"노드 {n.id}: 엘리베이터 노드에는 발생 설정(generation)이 불가")
+                # FIX 3: 유출 경로 없으면 방출 인원이 사라짐(mass loss)
+                if out_count[n.id] == 0 and n.exit_weight == 0:
+                    errors.append(
+                        f"노드 {n.id}: 엘리베이터는 출력 링크 또는 이탈(exit_weight)이 필요합니다(유출 경로 없음)"
+                    )
             # 엘리베이터 아닌 노드에 elevator 설정 금지
             if n.type != NodeType.ELEVATOR and n.elevator is not None:
                 errors.append(f"노드 {n.id}: 엘리베이터 설정은 엘리베이터 노드만 가능")
@@ -229,10 +241,43 @@ class StationGraph:
                 if train.mode not in ("both", "alight", "board"):
                     errors.append(f"노드 {n.id}: 열차 mode는 both/alight/board 중 하나")
 
-            # FIX 2: generation.kind 유효성 검사
+            # FIX 2: generation.kind 유효성 검사 + FIX 4: 파라미터 범위 검사
             if n.generation is not None:
-                if n.generation.kind not in ("constant", "poisson", "normal_pulse", "none"):
+                gen = n.generation
+                if gen.kind not in ("constant", "poisson", "normal_pulse", "none"):
                     errors.append(f"노드 {n.id}: 발생 분포 종류가 올바르지 않음")
+                # FIX 4a: rate 범위 검사 (constant/poisson)
+                if gen.kind in ("constant", "poisson"):
+                    if not (isinstance(gen.rate, (int, float))
+                            and math.isfinite(gen.rate) and gen.rate >= 0):
+                        errors.append(f"노드 {n.id}: 발생률(rate)은 0 이상이어야 함")
+                # FIX 4b: normal_pulse 파라미터 검사
+                if gen.kind == "normal_pulse":
+                    if gen.sigma_sec <= 0:
+                        errors.append(f"노드 {n.id}: 정규펄스 sigma_sec는 0보다 커야 함")
+                    if gen.total < 0:
+                        errors.append(f"노드 {n.id}: 정규펄스 total(총 발생 인원)은 0 이상이어야 함")
+                # FIX 4c: profile 형식 검사
+                if gen.profile is not None:
+                    try:
+                        valid_profile = (
+                            isinstance(gen.profile, list)
+                            and all(
+                                isinstance(entry, (list, tuple))
+                                and len(entry) == 2
+                                and all(
+                                    isinstance(v, (int, float))
+                                    and not isinstance(v, bool)
+                                    and math.isfinite(v) and v >= 0
+                                    for v in entry
+                                )
+                                for entry in gen.profile
+                            )
+                        )
+                    except (TypeError, ValueError):
+                        valid_profile = False
+                    if not valid_profile:
+                        errors.append(f"노드 {n.id}: 발생 profile 형식이 올바르지 않음")
 
             # FIX 3: NormalPulse 잘림 경고 (duration_seconds 제공 시)
             if (duration_seconds is not None

@@ -9,6 +9,12 @@ const VALID_TRAIN_MODES = new Set(['both', 'alight', 'board'])
 // 계획1 StationGraph.validate 와 동일 규칙 (즉시 GUI 피드백용)
 export function validateGraph(graph: StationGraphJSON): string[] {
   const errors: string[] = []
+  // FIX 2: 중복 노드 ID 검사 (가장 먼저)
+  const seenIds = new Set<string>()
+  for (const n of graph.nodes) {
+    if (seenIds.has(n.id)) errors.push(`중복된 노드 id: ${n.id}`)
+    seenIds.add(n.id)
+  }
   const ids = new Set(graph.nodes.map((n) => n.id))
   const outWeight: Record<string, number> = {}
   const outCount: Record<string, number> = {}
@@ -57,10 +63,38 @@ export function validateGraph(graph: StationGraphJSON): string[] {
 
     if (n.generation && !SOURCE_TYPES.has(n.type)) errors.push(`노드 ${n.id}: 발생은 출입구/승강장만 가능`)
 
-    // generation kind validation
+    // generation kind validation + FIX 4 파라미터 검사
     if (n.generation) {
-      if (!VALID_GEN_KINDS.has(n.generation.kind)) {
+      const gen = n.generation
+      if (!VALID_GEN_KINDS.has(gen.kind)) {
         errors.push(`노드 ${n.id}: 발생 분포 종류가 올바르지 않음`)
+      }
+      // FIX 4a: rate 범위 (constant/poisson)
+      if (gen.kind === 'constant' || gen.kind === 'poisson') {
+        const r = gen.rate ?? 0
+        if (!isFinite(r) || r < 0) {
+          errors.push(`노드 ${n.id}: 발생률(rate)은 0 이상이어야 함`)
+        }
+      }
+      // FIX 4b: normal_pulse sigma_sec / total
+      if (gen.kind === 'normal_pulse') {
+        const sigma = gen.sigma_sec ?? 0
+        if (sigma <= 0) {
+          errors.push(`노드 ${n.id}: 정규펄스 sigma_sec는 0보다 커야 함`)
+        }
+        if ((gen.total ?? 0) < 0) {
+          errors.push(`노드 ${n.id}: 정규펄스 total(총 발생 인원)은 0 이상이어야 함`)
+        }
+      }
+      // FIX 4c: profile 형식 검사
+      if (gen.profile != null) {
+        const validProfile = Array.isArray(gen.profile) && gen.profile.every(
+          (entry) => Array.isArray(entry) && entry.length === 2
+            && entry.every((v) => typeof v === 'number' && isFinite(v) && v >= 0),
+        )
+        if (!validProfile) {
+          errors.push(`노드 ${n.id}: 발생 profile 형식이 올바르지 않음`)
+        }
       }
     }
 
@@ -77,6 +111,10 @@ export function validateGraph(graph: StationGraphJSON): string[] {
       }
       if (n.train) errors.push(`노드 ${n.id}: 엘리베이터는 열차 설정을 가질 수 없음`)
       if (n.generation) errors.push(`노드 ${n.id}: 엘리베이터는 발생 설정을 가질 수 없음`)
+      // FIX 3: 유출 경로 없으면 방출 인원이 사라짐
+      if (outCount[n.id] === 0 && (n.exit_weight ?? 0) === 0) {
+        errors.push(`노드 ${n.id}: 엘리베이터는 출력 링크 또는 이탈(exit_weight)이 필요합니다(유출 경로 없음)`)
+      }
     }
     if (n.type !== 'elevator' && n.elevator) {
       errors.push(`노드 ${n.id}: 엘리베이터 설정은 엘리베이터 노드만 가능`)
