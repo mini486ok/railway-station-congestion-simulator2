@@ -17,11 +17,12 @@ class ZeroGenerator(Generator):
 
 
 def _rate_at(cfg: GenerationConfig, t_sec: float) -> float:
-    """profile이 있으면 계단식 시간가변 rate, 없으면 고정 rate."""
+    """profile이 있으면 계단식 시간가변 rate, 없으면 고정 rate. (입력 순서 무관)"""
     if not cfg.profile:
         return cfg.rate
-    rate = cfg.profile[0][1]
-    for ts, r in cfg.profile:
+    entries = sorted(cfg.profile, key=lambda e: e[0])
+    rate = entries[0][1]
+    for ts, r in entries:
         if t_sec >= ts:
             rate = r
         else:
