@@ -48,4 +48,24 @@ describe('validateGraph', () => {
     g.links.push({ source: 'A', target: 'ZZZ', distance: 10, weight: 0 })
     expect(validateGraph(g).some((e) => e.includes('존재하지 않는'))).toBe(true)
   })
+
+  it('flags platform with headway_sec=0', () => {
+    const g = okGraph()
+    const p = g.nodes.find((n) => n.type === 'platform')!
+    p.train = { ...p.train!, headway_sec: 0 }
+    expect(validateGraph(g).some((e) => e.includes('배차간격'))).toBe(true)
+  })
+
+  it('flags group with 2 platforms', () => {
+    const g = okGraph()
+    // Add second platform in same group
+    const p2 = makeNode('platform', 'P2')
+    p2.base_stay_prob = 0.5
+    p2.exit_weight = 1.0
+    p2.train = { first_arrival_sec: 60, headway_sec: 300 }
+    p2.group = 'G1'
+    g.nodes[1].group = 'G1'  // existing platform
+    g.nodes.push(p2)
+    expect(validateGraph(g).some((e) => e.includes('승강장이 2개 이상'))).toBe(true)
+  })
 })

@@ -1,7 +1,9 @@
-import type { StationGraphJSON } from './types'
+import type { StationGraphJSON, StationNode } from './types'
 
 const TOL = 1e-6
 const SOURCE_TYPES = new Set(['entrance', 'platform'])
+const VALID_GEN_KINDS = new Set(['constant', 'poisson', 'normal_pulse', 'none'])
+const VALID_ALIGHT_KINDS = new Set(['constant', 'poisson', 'normal'])
 
 // 계획1 StationGraph.validate 와 동일 규칙 (즉시 GUI 피드백용)
 export function validateGraph(graph: StationGraphJSON): string[] {
@@ -20,11 +22,24 @@ export function validateGraph(graph: StationGraphJSON): string[] {
     outCount[l.source] += 1
   }
 
+  // group consistency checks
+  const groupNodes: Record<string, StationNode[]> = {}
+  for (const n of graph.nodes) {
+    const g = n.group ?? ''
+    if (g !== '') {
+      if (!groupNodes[g]) groupNodes[g] = []
+      groupNodes[g].push(n)
+    }
+  }
+
   for (const n of graph.nodes) {
     if (n.base_stay_prob < 0 || n.base_stay_prob > 1) errors.push(`노드 ${n.id}: 체류확률은 [0,1]`)
     if (n.area <= 0) errors.push(`노드 ${n.id}: 면적은 0보다 커야 함`)
     const exitW = n.exit_weight ?? 0
     if (exitW < 0 || exitW > 1) errors.push(`노드 ${n.id}: exit_weight는 [0,1]`)
+
+    // initial_population < 0
+    if ((n.initial_population ?? 0) < 0) errors.push(`노드 ${n.id}: 초기 인원은 0 이상이어야 함`)
 
     const totalOut = outWeight[n.id] + exitW
     const hasOutflow = outCount[n.id] > 0 || exitW > 0
@@ -35,8 +50,62 @@ export function validateGraph(graph: StationGraphJSON): string[] {
     }
 
     if (n.generation && !SOURCE_TYPES.has(n.type)) errors.push(`노드 ${n.id}: 발생은 출입구/승강장만 가능`)
+
+    // generation kind validation
+    if (n.generation) {
+      if (!VALID_GEN_KINDS.has(n.generation.kind)) {
+        errors.push(`노드 ${n.id}: 발생 분포 종류가 올바르지 않음`)
+      }
+    }
+
     if (n.type === 'platform' && !n.train) errors.push(`노드 ${n.id}: 승강장은 열차 설정(train)이 필요`)
     if (n.type !== 'platform' && n.train) errors.push(`노드 ${n.id}: 열차 설정은 승강장만 가능`)
+
+    // platform train validations
+    if (n.type === 'platform' && n.train) {
+      const train = n.train
+      if (!(train.headway_sec > 0)) errors.push(`노드 ${n.id}: 배차간격(headway)은 0보다 커야 함`)
+      if (train.first_arrival_sec < 0) errors.push(`노드 ${n.id}: first_arrival_sec는 0 이상이어야 함`)
+      if (train.capacity !== undefined && train.capacity < 0) errors.push(`노드 ${n.id}: capacity는 0 이상이어야 함`)
+      if (train.alight_kind !== undefined && !VALID_ALIGHT_KINDS.has(train.alight_kind)) {
+        errors.push(`노드 ${n.id}: alight_kind가 올바르지 않음`)
+      }
+    }
   }
+
+  // group consistency checks
+  for (const [g, nodes] of Object.entries(groupNodes)) {
+    if (nodes.length <= 1) continue
+
+    const platforms = nodes.filter((n) => n.type === 'platform')
+    if (platforms.length > 1) {
+      errors.push(`그룹 '${g}': 한 그룹에 승강장이 2개 이상 포함될 수 없음`)
+    }
+
+    // mixed congestion_enabled (treat undefined as true)
+    const congestionValues = nodes.map((n) => n.congestion_enabled ?? true)
+    const allTrue = congestionValues.every((v) => v === true)
+    const allFalse = congestionValues.every((v) => v === false)
+    if (!allTrue && !allFalse) {
+      errors.push(`그룹 '${g}': '혼잡 동적 체류' 설정이 일치해야 함`)
+    }
+
+    // mixed weidmann params (treat undefined as defaults 1.34/5.4/1.913)
+    const weidmanns = nodes.map((n) => ({
+      v_free: n.weidmann?.v_free ?? 1.34,
+      rho_max: n.weidmann?.rho_max ?? 5.4,
+      gamma: n.weidmann?.gamma ?? 1.913,
+    }))
+    const first = weidmanns[0]
+    const weidmannMismatch = weidmanns.some(
+      (w) => Math.abs(w.v_free - first.v_free) > TOL ||
+             Math.abs(w.rho_max - first.rho_max) > TOL ||
+             Math.abs(w.gamma - first.gamma) > TOL
+    )
+    if (weidmannMismatch) {
+      errors.push(`그룹 '${g}': Weidmann 파라미터가 일치해야 함`)
+    }
+  }
+
   return errors
 }

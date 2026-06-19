@@ -12,8 +12,9 @@ export function ExportPanel({ sim }: { sim: ReturnType<typeof useSimulation> }) 
   const busy = sim.status === 'running' || sim.status === 'loading'
 
   async function exportCsv() {
+    if (busy) return
     try {
-      if (sim.status !== 'done') await sim.runInstant()
+      if (sim.status !== 'done' || sim.dirty) { const ok = await sim.runInstant(); if (!ok) return }
       const csv = await sim.getClient().exportCsv('wide')
       saveText('congestion_timeseries.csv', csv)
     } catch (e) {
@@ -22,8 +23,9 @@ export function ExportPanel({ sim }: { sim: ReturnType<typeof useSimulation> }) 
   }
 
   async function exportGroupCsv() {
+    if (busy) return
     try {
-      if (sim.status !== 'done') await sim.runInstant()
+      if (sim.status !== 'done' || sim.dirty) { const ok = await sim.runInstant(); if (!ok) return }
       const csv = await sim.getClient().exportGroupCsv()
       saveText('congestion_by_group.csv', csv)
     } catch (e) {
@@ -32,8 +34,9 @@ export function ExportPanel({ sim }: { sim: ReturnType<typeof useSimulation> }) 
   }
 
   async function exportGnn() {
+    if (busy) return
     try {
-      if (sim.status !== 'done') await sim.runInstant()
+      if (sim.status !== 'done' || sim.dirty) { const ok = await sim.runInstant(); if (!ok) return }
       const bundle = await sim.getClient().exportGnn()
       const files: Record<string, string> = {
         'adjacency.csv': bundle.adjacency,

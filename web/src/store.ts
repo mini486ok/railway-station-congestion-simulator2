@@ -11,6 +11,7 @@ interface State {
   links: StationLink[]
   config: SimConfig
   positions: Record<string, { x: number; y: number }>
+  version: number
   addNode: (type: NodeType, position?: { x: number; y: number }) => string
   updateNode: (id: string, patch: Partial<StationNode>) => void
   removeNode: (id: string) => void
@@ -49,6 +50,7 @@ function loadInitial(): Pick<State, 'nodes' | 'links' | 'config' | 'positions'> 
 
 export const useStore = create<State>((set, get) => ({
   ...loadInitial(),
+  version: 0,
 
   nextNodeId: () => {
     const ids = new Set(get().nodes.map((n) => n.id))
@@ -61,13 +63,13 @@ export const useStore = create<State>((set, get) => ({
     const id = get().nextNodeId()
     const node = makeNode(type, id)
     const pos = position ?? { x: 100 + get().nodes.length * 40, y: 100 }
-    set((st) => ({ nodes: [...st.nodes, node], positions: { ...st.positions, [id]: pos } }))
+    set((st) => ({ nodes: [...st.nodes, node], positions: { ...st.positions, [id]: pos }, version: st.version + 1 }))
     persist(get)
     return id
   },
 
   updateNode: (id, patch) => {
-    set((st) => ({ nodes: st.nodes.map((n) => (n.id === id ? { ...n, ...patch } : n)) }))
+    set((st) => ({ nodes: st.nodes.map((n) => (n.id === id ? { ...n, ...patch } : n)), version: st.version + 1 }))
     persist(get)
   },
 
@@ -79,6 +81,7 @@ export const useStore = create<State>((set, get) => ({
         nodes: st.nodes.filter((n) => n.id !== id),
         links: st.links.filter((l) => l.source !== id && l.target !== id),
         positions,
+        version: st.version + 1,
       }
     })
     persist(get)
@@ -87,22 +90,22 @@ export const useStore = create<State>((set, get) => ({
   addLink: (source, target) => {
     if (source === target) return
     if (get().links.some((l) => l.source === source && l.target === target)) return
-    set((st) => ({ links: [...st.links, makeLink(source, target)] }))
+    set((st) => ({ links: [...st.links, makeLink(source, target)], version: st.version + 1 }))
     persist(get)
   },
 
   updateLink: (index, patch) => {
-    set((st) => ({ links: st.links.map((l, i) => (i === index ? { ...l, ...patch } : l)) }))
+    set((st) => ({ links: st.links.map((l, i) => (i === index ? { ...l, ...patch } : l)), version: st.version + 1 }))
     persist(get)
   },
 
   removeLink: (index) => {
-    set((st) => ({ links: st.links.filter((_, i) => i !== index) }))
+    set((st) => ({ links: st.links.filter((_, i) => i !== index), version: st.version + 1 }))
     persist(get)
   },
 
   setConfig: (patch) => {
-    set((st) => ({ config: { ...st.config, ...patch } }))
+    set((st) => ({ config: { ...st.config, ...patch }, version: st.version + 1 }))
     persist(get)
   },
 
@@ -126,6 +129,7 @@ export const useStore = create<State>((set, get) => ({
         const w = sum > 0 ? (l.weight / sum) * remaining : remaining / outIdx.length
         return { ...l, weight: w }
       }),
+      version: st.version + 1,
     }))
     persist(get)
   },
@@ -136,12 +140,13 @@ export const useStore = create<State>((set, get) => ({
   },
 
   loadProject: (p) => {
-    set({
+    set((st) => ({
       nodes: p.graph?.nodes ?? [],
       links: p.graph?.links ?? [],
       config: { ...defaultSimConfig(), ...(p.config ?? {}) },
       positions: {},
-    })
+      version: st.version + 1,
+    }))
     persist(get)
   },
 }))
