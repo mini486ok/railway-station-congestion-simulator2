@@ -51,12 +51,14 @@ export function computeLayout(
     queue.push(ids[0])
   }
 
+  // Cap relaxation to nodes.length passes to break cycles
+  const maxDepth = nodes.length
   let head = 0
   while (head < queue.length) {
     const cur = queue[head++]
     for (const nb of adj[cur]) {
       const newDepth = depth[cur] + 1
-      if (depth[nb] === undefined || depth[nb] < newDepth) {
+      if (newDepth <= maxDepth && (depth[nb] === undefined || depth[nb] < newDepth)) {
         depth[nb] = newDepth
         queue.push(nb)
       }

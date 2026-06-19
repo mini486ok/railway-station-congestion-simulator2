@@ -11,16 +11,19 @@ export function Dashboard({ sim }: { sim: ReturnType<typeof useSimulation> }) {
   const storeNodes = useStore((s) => s.nodes)
   const nameMap: Record<string, string> = Object.fromEntries(storeNodes.map((n) => [n.id, n.name]))
 
-  // Auto-set allHidden=true when a large run first populates history
-  const prevSeriesCount = useRef(0)
+  // Auto-set allHidden=true only ONCE on first large run — not on byGroup toggle
+  const autoHideFiredRef = useRef(false)
+  const prevHistLenRef = useRef(0)
   useEffect(() => {
     const series = byGroup ? buildGroupSeries(sim.history, sim.nodeGroups) : buildSeries(sim.history, nameMap)
-    if (series.length > 14 && prevSeriesCount.current <= 14 && sim.history.length > 1) {
+    const histGrew = sim.history.length > 1 && sim.history.length !== prevHistLenRef.current
+    prevHistLenRef.current = sim.history.length
+    if (!autoHideFiredRef.current && series.length > 14 && histGrew) {
       setAllHidden(true)
+      autoHideFiredRef.current = true
     }
-    prevSeriesCount.current = series.length
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sim.history.length, byGroup])
+  }, [sim.history.length])
 
   // FIX G: data-update effect — NO purge in cleanup (prevents zoom/legend reset on every update)
   useEffect(() => {

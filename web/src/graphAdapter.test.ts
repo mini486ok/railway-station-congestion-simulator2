@@ -62,4 +62,16 @@ describe('computeLayout', () => {
     const coordB = `${positions['B'].x},${positions['B'].y}`
     expect(coordA).not.toBe(coordB)
   })
+
+  it('handles cyclic graphs without hanging (A→B, B→A)', () => {
+    const a = makeNode('entrance', 'A')
+    const b = makeNode('passage', 'B')
+    const l1 = makeLink('A', 'B')
+    const l2 = makeLink('B', 'A')
+    const positions = computeLayout([a, b], [l1, l2])
+    expect(positions['A']).toBeDefined()
+    expect(positions['B']).toBeDefined()
+    expect(Number.isFinite(positions['A'].x)).toBe(true)
+    expect(Number.isFinite(positions['B'].x)).toBe(true)
+  })
 })

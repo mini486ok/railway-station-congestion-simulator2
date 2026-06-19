@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import ReactFlow, {
   Background, Controls, MiniMap, type Connection, type NodeChange,
 } from 'reactflow'
@@ -23,7 +23,7 @@ export function GraphEditor({ selectedNodeId, selectedLinkIndex, onSelectNode, o
   const addLink = useStore((s) => s.addLink)
 
   // Effective positions: auto-layout is base, manually stored positions win
-  const layoutPositions = computeLayout(nodes, links)
+  const layoutPositions = useMemo(() => computeLayout(nodes, links), [nodes, links])
   const effectivePositions = { ...layoutPositions, ...positions }
 
   const rfNodes = toFlowNodes(nodes, effectivePositions, selectedNodeId)

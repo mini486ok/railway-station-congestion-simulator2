@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { ReactFlowProvider } from 'reactflow'
 import './styles.css'
 import { useStore } from './store'
@@ -29,7 +29,18 @@ export default function App() {
   const [view, setView] = useState<'sim' | 'usage' | 'output'>('sim')
   const [hidden, setHidden] = useState<string[]>(listHidden)
   const [loadFeedback, setLoadFeedback] = useState<string>('')
+  const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sim = useSimulation()
+
+  function setFeedbackWithAutoClear(msg: string) {
+    if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current)
+    setLoadFeedback(msg)
+    feedbackTimerRef.current = setTimeout(() => setLoadFeedback(''), 3000)
+  }
+
+  useEffect(() => () => {
+    if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current)
+  }, [])
 
   const isBuiltinSelected = selectedValue.startsWith('builtin:')
   const selectedBuiltinName = isBuiltinSelected ? selectedValue.slice('builtin:'.length) : ''
@@ -56,14 +67,14 @@ export default function App() {
                     const project = loadTemplate(name)
                     if (project) {
                       loadProject(project)
-                      setLoadFeedback(`방금 불러옴: ${name} (${project.graph.nodes.length} 노드)`)
+                      setFeedbackWithAutoClear(`방금 불러옴: ${name} (${project.graph.nodes.length} 노드)`)
                     }
                   } else if (val.startsWith('user:')) {
                     const name = val.slice('user:'.length)
                     const tmpl = userTemplates.find((t) => t.name === name)
                     if (tmpl) {
                       loadProject(tmpl.project)
-                      setLoadFeedback(`방금 불러옴: ${name} (${tmpl.project.graph.nodes.length} 노드)`)
+                      setFeedbackWithAutoClear(`방금 불러옴: ${name} (${tmpl.project.graph.nodes.length} 노드)`)
                     }
                   }
                 }}
