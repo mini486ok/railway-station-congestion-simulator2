@@ -35,6 +35,12 @@ def load(config_text: str) -> str:
     # FIX 2: dt_seconds/duration_seconds 유효성 검사
     if config.dt_seconds <= 0 or config.duration_seconds <= 0:
         raise ValueError("dt_seconds와 duration_seconds는 0보다 커야 합니다")
+    # FIX 5: headway < dt → 열차 누락 가드
+    from sim.model import NodeType
+    for nd in graph.nodes:
+        if nd.type == NodeType.PLATFORM and nd.train is not None:
+            if nd.train.headway_sec < config.dt_seconds:
+                raise ValueError("배차간격(headway)이 Δt(dt_seconds)보다 작아 열차가 누락됩니다")
     _engine = Engine(graph, config)
     # 유효 그룹 레이블: group 있으면 그대로, 없으면 node.id
     node_map = {nd.id: nd for nd in graph.nodes}

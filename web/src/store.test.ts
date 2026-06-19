@@ -51,11 +51,20 @@ describe('store', () => {
     expect(useStore.getState().nodes[0].id).toBe(a)
   })
 
-  it('resets positions on loadProject', () => {
+  it('clears positions when loading project without positions', () => {
     const s = useStore.getState()
     const a = s.addNode('entrance')
     expect(useStore.getState().positions[a]).toBeDefined()
     useStore.getState().loadProject({ nodes: [], links: [] } as never)
     expect(useStore.getState().positions[a]).toBeUndefined()
+  })
+
+  it('restores positions when loading project with positions', () => {
+    const project = {
+      graph: { nodes: [], links: [] },
+      positions: { N99: { x: 123, y: 456 } },
+    } as never
+    useStore.getState().loadProject(project)
+    expect(useStore.getState().positions['N99']).toEqual({ x: 123, y: 456 })
   })
 })

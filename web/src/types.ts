@@ -61,7 +61,7 @@ export interface SimConfig {
 }
 
 export interface StationGraphJSON { nodes: StationNode[]; links: StationLink[] }
-export interface ProjectConfig { graph: StationGraphJSON; config: SimConfig }
+export interface ProjectConfig { graph: StationGraphJSON; config: SimConfig; positions?: Record<string, { x: number; y: number }> }
 
 export interface Snapshot {
   t: number

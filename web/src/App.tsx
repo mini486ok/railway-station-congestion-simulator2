@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { ReactFlowProvider } from 'reactflow'
 import './styles.css'
 import { useStore } from './store'
@@ -28,7 +28,19 @@ export default function App() {
   const [selectedValue, setSelectedValue] = useState<string>('')
   const [view, setView] = useState<'sim' | 'usage' | 'output'>('sim')
   const [hidden, setHidden] = useState<string[]>(listHidden)
+  const [loadFeedback, setLoadFeedback] = useState<string>('')
+  const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sim = useSimulation()
+
+  function setFeedbackWithAutoClear(msg: string) {
+    if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current)
+    setLoadFeedback(msg)
+    feedbackTimerRef.current = setTimeout(() => setLoadFeedback(''), 3000)
+  }
+
+  useEffect(() => () => {
+    if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current)
+  }, [])
 
   const isBuiltinSelected = selectedValue.startsWith('builtin:')
   const selectedBuiltinName = isBuiltinSelected ? selectedValue.slice('builtin:'.length) : ''
@@ -43,15 +55,27 @@ export default function App() {
             <div className="row" style={{ gap: '6px', alignItems: 'center' }}>
               <select
                 value={selectedValue}
+                title={selectedValue}
+                style={{ minWidth: 280 }}
                 onChange={(e) => {
                   const val = e.target.value
+                  const hasNodes = useStore.getState().nodes.length > 0
+                  if (hasNodes && !window.confirm('현재 구성을 덮어씁니다. 계속할까요?')) return
                   setSelectedValue(val)
                   if (val.startsWith('builtin:')) {
-                    const project = loadTemplate(val.slice('builtin:'.length))
-                    if (project) loadProject(project)
+                    const name = val.slice('builtin:'.length)
+                    const project = loadTemplate(name)
+                    if (project) {
+                      loadProject(project)
+                      setFeedbackWithAutoClear(`방금 불러옴: ${name} (${project.graph.nodes.length} 노드)`)
+                    }
                   } else if (val.startsWith('user:')) {
-                    const tmpl = userTemplates.find((t) => t.name === val.slice('user:'.length))
-                    if (tmpl) loadProject(tmpl.project)
+                    const name = val.slice('user:'.length)
+                    const tmpl = userTemplates.find((t) => t.name === name)
+                    if (tmpl) {
+                      loadProject(tmpl.project)
+                      setFeedbackWithAutoClear(`방금 불러옴: ${name} (${tmpl.project.graph.nodes.length} 노드)`)
+                    }
                   }
                 }}
               >
@@ -69,6 +93,10 @@ export default function App() {
                   </optgroup>
                 )}
               </select>
+
+              {loadFeedback && (
+                <span style={{ fontSize: '0.8em', color: '#336', whiteSpace: 'nowrap' }}>{loadFeedback}</span>
+              )}
 
               {/* 이 예제 숨기기 */}
               <button

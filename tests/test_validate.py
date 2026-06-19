@@ -1,5 +1,5 @@
 from sim.model import (NodeType, Node, Link, StationGraph,
-                       GenerationConfig, TrainConfig)
+                       GenerationConfig, TrainConfig, ElevatorConfig)
 
 
 def _ok_graph() -> StationGraph:
@@ -315,3 +315,63 @@ def test_normal_pulse_no_warning_without_duration():
     errs = g.validate()  # duration 미지정
     pulse_errs = [e for e in errs if "정규펄스" in e]
     assert pulse_errs == [], f"duration 미지정 시 경고 없어야 함: {pulse_errs}"
+
+
+# ─────────────────────────────────────────────
+# SINK TRAP: 출력 있는데 이동확률 0 검증
+# ─────────────────────────────────────────────
+
+def test_sink_trap_passage_with_outlink_and_base_stay_prob_one():
+    """통로(PASSAGE) 노드: 출력 링크 있음 + base_stay_prob=1.0 → 이동확률이 0 오류."""
+    passage = Node(id="C", name="통로", type=NodeType.PASSAGE, area=10,
+                   base_stay_prob=1.0, exit_weight=0.0)
+    entrance = Node(id="A", name="입구", type=NodeType.ENTRANCE, area=50,
+                    base_stay_prob=0.2, exit_weight=0.0,
+                    generation=GenerationConfig(kind="constant", rate=1.0))
+    links = [Link(source="A", target="C", distance=10, weight=1.0),
+             Link(source="C", target="A", distance=10, weight=1.0)]  # C에 출력 링크 있음
+    g = StationGraph(nodes=[entrance, passage], links=links)
+    errs = g.validate()
+    assert any("이동확률이 0" in e and "C" in e for e in errs), f"출력-체류 오류 없음: {errs}"
+
+
+def test_no_error_boarding_platform_with_base_stay_prob_one():
+    """승강장(PLATFORM): 출력 링크 없음 + exit_weight=0 + base_stay_prob=1.0 → NO 오류."""
+    platform = Node(id="P", name="승강장", type=NodeType.PLATFORM, area=200,
+                    base_stay_prob=1.0, exit_weight=0.0,
+                    train=TrainConfig(first_arrival_sec=60, headway_sec=300))
+    g = StationGraph(nodes=[platform], links=[])
+    errs = g.validate()
+    trap_errs = [e for e in errs if "이동확률이 0" in e]
+    assert trap_errs == [], f"승강장에서 오류 없어야 함: {trap_errs}"
+
+
+def test_no_error_elevator_with_outlink_and_base_stay_prob_one():
+    """엘리베이터(ELEVATOR) 노드: 출력 링크 있음 + base_stay_prob=1.0 → NO 오류 (엘리베이터 제외)."""
+    elevator = Node(id="E", name="엘리베이터", type=NodeType.ELEVATOR, area=5,
+                    base_stay_prob=1.0, exit_weight=0.0,
+                    elevator=ElevatorConfig(capacity=10, speed=3))
+    entrance = Node(id="A", name="입구", type=NodeType.ENTRANCE, area=50,
+                    base_stay_prob=0.2, exit_weight=0.0,
+                    generation=GenerationConfig(kind="constant", rate=1.0))
+    links = [Link(source="A", target="E", distance=10, weight=1.0),
+             Link(source="E", target="A", distance=10, weight=1.0)]  # E에 출력 링크
+    g = StationGraph(nodes=[entrance, elevator], links=links)
+    errs = g.validate()
+    trap_errs = [e for e in errs if "이동확률이 0" in e]
+    assert trap_errs == [], f"엘리베이터 오류 없어야 함: {trap_errs}"
+
+
+def test_no_error_passage_with_low_base_stay_prob_and_outlink():
+    """통로 노드: base_stay_prob<1.0 + 출력 링크 있음 → NO sink trap 오류."""
+    passage = Node(id="C", name="통로", type=NodeType.PASSAGE, area=10,
+                   base_stay_prob=0.5, exit_weight=0.0)  # base_stay_prob < 1.0
+    entrance = Node(id="A", name="입구", type=NodeType.ENTRANCE, area=50,
+                    base_stay_prob=0.2, exit_weight=0.0,
+                    generation=GenerationConfig(kind="constant", rate=1.0))
+    links = [Link(source="A", target="C", distance=10, weight=1.0),
+             Link(source="C", target="A", distance=10, weight=1.0)]  # C에 출력 링크
+    g = StationGraph(nodes=[entrance, passage], links=links)
+    errs = g.validate()
+    trap_errs = [e for e in errs if "이동확률이 0" in e]
+    assert trap_errs == [], f"base_stay_prob<1이면 오류 없어야 함: {trap_errs}"

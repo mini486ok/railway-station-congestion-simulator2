@@ -104,4 +104,59 @@ describe('validateGraph', () => {
     const p = makeNode('platform', 'P1')
     expect(p.train?.mode).toBe('both')
   })
+
+  // ── R3 (Review-round-2) 추가 검증 ──
+
+  it('flags duplicate node ids', () => {
+    const g = okGraph()
+    const dup = makeNode('passage', 'A') // 'A'와 동일한 id → 중복
+    dup.base_stay_prob = 1.0
+    g.nodes.push(dup)
+    expect(validateGraph(g).some((e) => e.includes('중복된 노드 id: A'))).toBe(true)
+  })
+
+  it('flags elevator with no outflow (no links, exit_weight=0)', () => {
+    const g = okGraph()
+    const ev = makeNode('elevator', 'EV2')
+    ev.exit_weight = 0 // exit_weight=0, 링크도 없음
+    g.nodes.push(ev)
+    expect(validateGraph(g).some((e) => e.includes('유출 경로 없음'))).toBe(true)
+  })
+
+  it('allows elevator with exit_weight > 0', () => {
+    const g = okGraph()
+    const ev = makeNode('elevator', 'EV3')
+    ev.exit_weight = 1.0
+    g.nodes.push(ev)
+    const errs = validateGraph(g)
+    expect(errs.some((e) => e.includes('유출 경로 없음') && e.includes('EV3'))).toBe(false)
+  })
+
+  it('flags generation rate < 0', () => {
+    const g = okGraph()
+    const a = g.nodes.find((n) => n.type === 'entrance')!
+    a.generation = { kind: 'constant', rate: -1 }
+    expect(validateGraph(g).some((e) => e.includes('발생률(rate)은 0 이상이어야 함'))).toBe(true)
+  })
+
+  it('allows generation rate = 0', () => {
+    const g = okGraph()
+    const a = g.nodes.find((n) => n.type === 'entrance')!
+    a.generation = { kind: 'constant', rate: 0 }
+    expect(validateGraph(g).some((e) => e.includes('발생률(rate)'))).toBe(false)
+  })
+
+  it('flags normal_pulse sigma_sec = 0', () => {
+    const g = okGraph()
+    const a = g.nodes.find((n) => n.type === 'entrance')!
+    a.generation = { kind: 'normal_pulse', sigma_sec: 0, total: 100 }
+    expect(validateGraph(g).some((e) => e.includes('sigma_sec는 0보다 커야 함'))).toBe(true)
+  })
+
+  it('flags malformed profile (negative time)', () => {
+    const g = okGraph()
+    const a = g.nodes.find((n) => n.type === 'entrance')!
+    a.generation = { kind: 'constant', rate: 1, profile: [[-10, 2], [50, 5]] }
+    expect(validateGraph(g).some((e) => e.includes('발생 profile 형식이 올바르지 않음'))).toBe(true)
+  })
 })

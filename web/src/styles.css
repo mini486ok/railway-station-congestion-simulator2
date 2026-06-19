@@ -1,7 +1,7 @@
 * { box-sizing: border-box; }
 body { margin: 0; font-family: system-ui, sans-serif; color: #1a1a1a; }
 .app { display: flex; flex-direction: column; height: 100vh; }
-header { display: flex; gap: 16px; align-items: center; padding: 8px 16px; background: #0f2a4a; color: #fff; }
+header { display: flex; gap: 16px; align-items: center; padding: 8px 16px; background: #0f2a4a; color: #fff; flex-wrap: wrap; row-gap: 6px; }
 header h1 { font-size: 18px; margin: 0; }
 .layout { display: grid; grid-template-columns: 1fr 1fr 360px; flex: 1; min-height: 0; }
 .left, .center, .right { padding: 8px; overflow: auto; border-right: 1px solid #ddd; }
@@ -15,7 +15,7 @@ input, select { padding: 4px; }
 .inspector, .export-panel, .batch-panel { border: 1px solid #ddd; border-radius: 6px; padding: 8px; margin: 8px 0; }
 .validation { padding: 8px; border-radius: 6px; margin: 8px 0; font-size: 13px; }
 .validation.ok { background: #eafaef; color: #161; }
-.validation.err { background: #fdeaea; color: #911; white-space: pre-wrap; }
+.validation.err { background: #fdeaea; color: #911; white-space: pre-wrap; max-height: 220px; overflow-y: auto; }
 .metrics { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; margin-bottom: 8px; }
 progress { width: 200px; }
 .infotip { position: relative; display: inline-block; margin-left: 4px; }
@@ -24,7 +24,7 @@ progress { width: 200px; }
 .infotip-pop { position: absolute; left: 0; top: 18px; z-index: 50; width: 220px;
   background: #1a2b3c; color: #fff; padding: 8px 10px; border-radius: 6px;
   font-size: 12px; line-height: 1.4; box-shadow: 0 4px 12px rgba(0,0,0,.25); font-weight: 400; }
-.tabs { display: flex; gap: 6px; margin-left: auto; }
+.tabs { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
 .tabs button { background: #163a5f; color: #cfe; border: 1px solid #2a5a8a; }
 .tabs button.active { background: #2a6; color: #fff; border-color: #2a6; }
 .guide { padding: 16px 24px; max-width: 900px; overflow: auto; line-height: 1.6; }

@@ -44,6 +44,15 @@ export function useSimulation(opts: Options = {}) {
 
   const dirty = version !== loadedVersionRef.current
 
+  // FIX 6: Clear stale error when project changes after an error
+  useEffect(() => {
+    if (dirty && status === 'error') {
+      setError(null)
+      setStatus('idle')
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [version])
+
   const client = useCallback((): SimClient => {
     if (!clientRef.current) {
       if (opts.clientFactory) {

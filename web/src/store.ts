@@ -135,8 +135,8 @@ export const useStore = create<State>((set, get) => ({
   },
 
   toProject: () => {
-    const { nodes, links, config } = get()
-    return { graph: { nodes, links }, config }
+    const { nodes, links, config, positions } = get()
+    return { graph: { nodes, links }, config, positions }
   },
 
   loadProject: (p) => {
@@ -144,7 +144,7 @@ export const useStore = create<State>((set, get) => ({
       nodes: p.graph?.nodes ?? [],
       links: p.graph?.links ?? [],
       config: { ...defaultSimConfig(), ...(p.config ?? {}) },
-      positions: {},
+      positions: p.positions ?? {},
       version: st.version + 1,
     }))
     persist(get)

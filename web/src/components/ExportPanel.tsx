@@ -83,6 +83,11 @@ export function ExportPanel({ sim }: { sim: ReturnType<typeof useSimulation> }) 
     <div className="export-panel">
       <strong>내보내기 / 설정</strong>
       <div style={{ fontSize: '0.8em', color: '#666', margin: '2px 0 4px' }}>내보내기 시 시뮬레이션이 자동 실행됩니다(결과가 없으면).</div>
+      {sim.status === 'running' && (
+        <div style={{ fontSize: '0.85em', color: '#664400', margin: '4px 0', fontStyle: 'italic' }}>
+          시뮬레이션 실행 중… 잠시만 기다려 주세요
+        </div>
+      )}
       <div className="row">
         <button onClick={() => void exportCsv()} disabled={busy}>혼잡도 CSV</button>
         <button onClick={() => void exportGroupCsv()} disabled={busy}>그룹 혼잡도 CSV</button>

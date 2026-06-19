@@ -55,9 +55,16 @@ export function NodeInspector({ nodeId }: { nodeId: string }) {
           onChange={(e) => {
             const t = e.target.value as NodeType
             const toElev = t === 'elevator'
+            const isSourceType = t === 'entrance' || t === 'platform'
+            // Restore a sensible default generation when switching TO a source type and none exists
+            const newGeneration = toElev
+              ? null
+              : isSourceType
+                ? (node.generation ?? { kind: 'poisson' as const, rate: 1.0 })
+                : null
             updateNode(node.id, {
               type: t,
-              generation: (!toElev && (t === 'entrance' || t === 'platform')) ? node.generation : null,
+              generation: newGeneration,
               train: t === 'platform' ? train : null,
               elevator: toElev ? { capacity: 10, speed: 3 } : null,
             })

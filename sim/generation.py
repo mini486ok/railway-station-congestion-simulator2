@@ -21,7 +21,7 @@ def _rate_at(cfg: GenerationConfig, t_sec: float) -> float:
     if not cfg.profile:
         return cfg.rate
     entries = sorted(cfg.profile, key=lambda e: e[0])
-    rate = entries[0][1]
+    rate = cfg.rate
     for ts, r in entries:
         if t_sec >= ts:
             rate = r
