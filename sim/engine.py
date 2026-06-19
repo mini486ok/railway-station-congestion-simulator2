@@ -59,7 +59,7 @@ class Engine:
     def step(self) -> None:
         n = len(self.node_ids)
         s = self.t
-        move_prob = self.base_move  # 혼잡 미적용(Task 10에서 self._move_prob()로 교체)
+        move_prob = self._move_prob()  # 혼잡도 기반 동적 이동확률
         movers = self.N * move_prob
         newN = self.N - movers  # 잔류(stayers)
 
