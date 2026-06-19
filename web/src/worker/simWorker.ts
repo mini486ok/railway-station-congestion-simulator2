@@ -12,23 +12,39 @@ class SimApi {
   }
 
   private async _doInit(base: string): Promise<void> {
-    // ES 모듈 워커에서는 importScripts 불가 → Pyodide ESM(pyodide.mjs)을 동적 import
-    const mod = await import(/* @vite-ignore */ `${PYODIDE_INDEX_URL}pyodide.mjs`)
-    this.pyodide = await mod.loadPyodide({ indexURL: PYODIDE_INDEX_URL })
-    await this.pyodide.loadPackage('numpy')
-    // sim 패키지 파일을 FS에 기록
-    this.pyodide.FS.mkdirTree('sim')
-    const urls = simFileUrls(base)
-    const texts = await Promise.all(
-      urls.map((u) => fetch(u).then((r) => {
-        if (!r.ok) throw new Error(`sim 파일 로드 실패: ${u}`)
-        return r.text()
-      })),
-    )
-    SIM_FILES.forEach((name, i) => {
-      this.pyodide.FS.writeFile(`sim/${name}`, texts[i])
-    })
-    this.pyodide.runPython('import sim.webapi as webapi')
+    let phase = 'import-pyodide'
+    try {
+      // ES 모듈 워커에서는 importScripts 불가 → Pyodide ESM(pyodide.mjs)을 동적 import
+      const mod = await import(/* @vite-ignore */ `${PYODIDE_INDEX_URL}pyodide.mjs`)
+      phase = 'loadPyodide'
+      this.pyodide = await mod.loadPyodide({ indexURL: PYODIDE_INDEX_URL })
+      phase = 'loadPackage-numpy'
+      await this.pyodide.loadPackage('numpy')
+      // sim 패키지를 FS에 기록 (Pyodide CWD 절대경로 사용)
+      phase = 'mkdir-sim'
+      const dir = '/home/pyodide/sim'
+      this.pyodide.FS.mkdirTree(dir)
+      phase = 'fetch-sim-files'
+      const urls = simFileUrls(base)
+      const texts = await Promise.all(
+        urls.map((u) => fetch(u).then((r) => {
+          if (!r.ok) throw new Error(`sim 파일 로드 실패(${r.status}): ${u}`)
+          return r.text()
+        })),
+      )
+      phase = 'write-sim-files'
+      SIM_FILES.forEach((name, i) => {
+        this.pyodide.FS.writeFile(`${dir}/${name}`, texts[i])
+      })
+      phase = 'import-webapi'
+      this.pyodide.runPython('import sim.webapi as webapi')
+    } catch (e: unknown) {
+      const err = e as { errno?: number; name?: string; message?: string }
+      const detail = `init 실패 [${phase}]: ${err?.name ?? ''} ${err?.message ?? ''}` +
+        (err?.errno !== undefined ? ` (errno=${err.errno})` : '')
+      this.initPromise = null // 재시도 가능하도록 캐시 해제
+      throw new Error(detail)
+    }
   }
 
   private call(expr: string): string {

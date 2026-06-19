@@ -9,6 +9,13 @@ export function computeProgress(t: number, numSteps: number): number {
   return Math.min(1, t / numSteps)
 }
 
+export function errMsg(e: unknown): string {
+  if (e instanceof Error) return `${e.name}: ${e.message}`
+  if (typeof e === 'string') return e
+  if (e && typeof e === 'object' && 'message' in e) return String((e as { message: unknown }).message)
+  try { return JSON.stringify(e) } catch { return String(e) }
+}
+
 export type SimStatus =
   | 'idle' | 'loading' | 'ready' | 'running' | 'paused' | 'done' | 'error'
 
@@ -57,7 +64,8 @@ export function useSimulation(opts: Options = {}) {
       setSnapshot(snap); setHistory([snap]); setStatus('ready')
       return true
     } catch (e) {
-      setError(String(e)); setStatus('error'); return false
+      console.error('[sim:prepare]', e)
+      setError(errMsg(e)); setStatus('error'); return false
     }
   }, [client, ensureInit])
 
@@ -97,19 +105,24 @@ export function useSimulation(opts: Options = {}) {
   const runInstant = useCallback(async () => {
     if (status === 'idle' || status === 'error') { const ok = await prepare(); if (!ok) return }
     setStatus('running')
-    const snap = await client().runAll()
-    const h = await client().historyJson()
-    const hist: Snapshot[] = h.values.map((row, i) => ({
-      t: i,
-      time_sec: i * h.dt,
-      N: row,
-      node_ids: h.node_ids,
-      total_generated: snap.total_generated,
-      total_exited: snap.total_exited,
-    }))
-    setHistory(hist)
-    setSnapshot(snap)
-    setStatus('done')
+    try {
+      const snap = await client().runAll()
+      const h = await client().historyJson()
+      const hist: Snapshot[] = h.values.map((row, i) => ({
+        t: i,
+        time_sec: i * h.dt,
+        N: row,
+        node_ids: h.node_ids,
+        total_generated: snap.total_generated,
+        total_exited: snap.total_exited,
+      }))
+      setHistory(hist)
+      setSnapshot(snap)
+      setStatus('done')
+    } catch (e) {
+      console.error('[sim:runInstant]', e)
+      setError(errMsg(e)); setStatus('error')
+    }
   }, [status, prepare, client])
 
   useEffect(() => () => { runningRef.current = false }, [])
