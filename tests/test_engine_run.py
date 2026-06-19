@@ -55,3 +55,21 @@ def test_golden_first_two_steps():
     # t2: A movers(t1)=10*0.5=5 →B 지연1 ; A=10*0.5+0+10=15 ; B(t2)=0+arrivals(5 from t1 movers? tt1 도착 t2)=5
     assert abs(hist[2][0] - 15.0) < 1e-9
     assert abs(hist[2][1] - 5.0) < 1e-9
+
+
+def test_run_is_repeatable_no_crash():
+    g = _golden_graph()
+    e = Engine(g, SimConfig(dt_seconds=5.0, duration_seconds=50.0))
+    h1 = e.run().copy()
+    h2 = e.run().copy()   # 재호출 시 크래시 없어야 하고 동일 결과(재현성)
+    assert np.allclose(h1, h2)
+
+
+def test_reset_restores_initial_state():
+    g = _golden_graph()
+    e = Engine(g, SimConfig(dt_seconds=5.0, duration_seconds=50.0))
+    e.run()
+    e.reset()
+    assert e.t == 0
+    assert np.allclose(e.N, e.history[0])
+    assert e.total_generated == 0.0 and e.total_exited == 0.0

@@ -12,13 +12,11 @@ class Engine:
         graph.resolve_travel_times(config)
         self.graph = graph
         self.config = config
-        self.rng = np.random.default_rng(config.seed)
 
         self.node_ids = [n.id for n in graph.nodes]
         self._idx = {nid: i for i, nid in enumerate(self.node_ids)}
         n = len(self.node_ids)
 
-        self.N = np.array([nd.initial_population for nd in graph.nodes], dtype=float)
         self.area = np.array([nd.area for nd in graph.nodes], dtype=float)
         self.base_move = np.array([1.0 - nd.base_stay_prob for nd in graph.nodes], dtype=float)
         self.exit_weight = np.array([nd.exit_weight for nd in graph.nodes], dtype=float)
@@ -36,23 +34,30 @@ class Engine:
         # 노드별 발생자
         self.generators = [build_generator(nd.generation) for nd in graph.nodes]
 
-        # 승강장 열차 스케줄
-        duration = self.config.duration_seconds
-        self.train_steps: dict[int, set[int]] = {}
+        # 열차 설정(정적, rng 불필요)
         self.train_cfg = {}
         for i, nd in enumerate(graph.nodes):
             if nd.type == NodeType.PLATFORM and nd.train is not None:
-                self.train_steps[i] = train_arrival_steps(
-                    nd.train, self.config.dt_seconds, duration, self.rng,
-                    self.config.stochastic)
                 self.train_cfg[i] = nd.train
 
-        self._pending: dict[int, np.ndarray] = {}
+        self.num_steps = int(round(self.config.duration_seconds / self.config.dt_seconds))
+        self.reset()
+
+    def reset(self) -> None:
+        """동적 상태를 초기값으로 되돌린다(run 재호출·웹 reset 지원). 동일 seed로 재현 가능."""
+        self.rng = np.random.default_rng(self.config.seed)
+        self.N = np.array([nd.initial_population for nd in self.graph.nodes], dtype=float)
         self.t = 0
         self.total_exited = 0.0
         self.total_generated = 0.0
-
-        self.num_steps = int(round(self.config.duration_seconds / self.config.dt_seconds))
+        self._pending = {}
+        # 열차 스케줄(확률 모드의 지터가 rng를 소비하므로 reset에서 재구성)
+        self.train_steps = {}
+        for i, nd in enumerate(self.graph.nodes):
+            if nd.type == NodeType.PLATFORM and nd.train is not None:
+                self.train_steps[i] = train_arrival_steps(
+                    nd.train, self.config.dt_seconds, self.config.duration_seconds,
+                    self.rng, self.config.stochastic)
         self.history = np.zeros((self.num_steps + 1, len(self.node_ids)))
         self.history[0] = self.N
 
@@ -110,6 +115,7 @@ class Engine:
         self.t += 1
 
     def run(self, on_progress=None) -> np.ndarray:
+        self.reset()
         for _ in range(self.num_steps):
             self.step()
             self.history[self.t] = self.N

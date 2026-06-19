@@ -1,7 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, asdict, fields
 from enum import Enum
+
+
+def _known_kwargs(cls, d: dict) -> dict:
+    """dataclass cls의 실제 필드만 추려 미지정 키(버전 드리프트)를 무시한다."""
+    valid = {f.name for f in fields(cls)}
+    return {k: v for k, v in d.items() if k in valid}
 
 
 class NodeType(str, Enum):
@@ -100,13 +106,13 @@ class StationGraph:
             nd = dict(nd)
             nd["type"] = NodeType(nd["type"])
             wd = nd.get("weidmann")
-            nd["weidmann"] = WeidmannParams(**wd) if wd else WeidmannParams()
+            nd["weidmann"] = WeidmannParams(**_known_kwargs(WeidmannParams, wd)) if wd else WeidmannParams()
             gen = nd.get("generation")
-            nd["generation"] = GenerationConfig(**gen) if gen else None
+            nd["generation"] = GenerationConfig(**_known_kwargs(GenerationConfig, gen)) if gen else None
             tr = nd.get("train")
-            nd["train"] = TrainConfig(**tr) if tr else None
-            nodes.append(Node(**nd))
-        links = [Link(**dict(ld)) for ld in data["links"]]
+            nd["train"] = TrainConfig(**_known_kwargs(TrainConfig, tr)) if tr else None
+            nodes.append(Node(**_known_kwargs(Node, nd)))
+        links = [Link(**_known_kwargs(Link, dict(ld))) for ld in data["links"]]
         return cls(nodes=nodes, links=links)
 
     def resolve_travel_times(self, config: SimConfig) -> None:

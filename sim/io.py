@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import numpy as np
-from dataclasses import asdict
+from dataclasses import asdict, fields
 
 from sim.model import StationGraph, SimConfig
 
@@ -65,7 +65,9 @@ def save_config(graph: StationGraph, config: SimConfig) -> str:
 def load_config(text: str) -> tuple[StationGraph, SimConfig]:
     data = json.loads(text)
     graph = StationGraph.from_json(data["graph"])
-    config = SimConfig(**data["config"])
+    known = {f.name for f in fields(SimConfig)}
+    cfg_data = {k: v for k, v in data["config"].items() if k in known}
+    config = SimConfig(**cfg_data)
     return graph, config
 
 

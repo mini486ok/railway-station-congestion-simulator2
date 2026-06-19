@@ -34,3 +34,15 @@ def test_observation_noise_and_missing():
     assert valid.min() >= 0.0                 # 음수 클립
     assert abs(np.nanmean(out) - 50.0) < 2.0  # 평균 보존
     assert np.isnan(out).mean() > 0.1         # 결측 일부 발생
+
+
+def test_load_ignores_unknown_keys():
+    import json
+    g = _g()
+    cfg = SimConfig(dt_seconds=10.0, seed=7)
+    data = json.loads(save_config(g, cfg))
+    data["config"]["future_field"] = 123            # 미래에 추가될 설정 키
+    data["graph"]["nodes"][0]["weird_key"] = "x"    # 노드의 알 수 없는 키
+    g2, cfg2 = load_config(json.dumps(data, ensure_ascii=False))  # 예외 없이 로드
+    assert cfg2.dt_seconds == 10.0 and cfg2.seed == 7
+    assert g2.nodes[0].id == g.nodes[0].id
