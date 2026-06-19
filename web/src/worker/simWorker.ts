@@ -81,6 +81,10 @@ class SimApi {
     return JSON.parse(this.call('export_gnn()'))
   }
 
+  async exportGnnGroup(): Promise<Record<string, string>> {
+    return JSON.parse(this.call('export_gnn_group()'))
+  }
+
   async historyJson(): Promise<{ node_ids: string[]; dt: number; values: number[][] }> {
     return JSON.parse(this.call('history_json()'))
   }

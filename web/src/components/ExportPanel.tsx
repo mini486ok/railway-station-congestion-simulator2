@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { useStore } from '../store'
-import { saveText, saveBlob, bundleToZip } from '../download'
+import { saveText, saveCsv, saveBlob, bundleToZip } from '../download'
 import type { useSimulation } from '../useSimulation'
 import type { ProjectConfig } from '../types'
 
@@ -16,7 +16,7 @@ export function ExportPanel({ sim }: { sim: ReturnType<typeof useSimulation> }) 
     try {
       if (sim.status !== 'done' || sim.dirty) { const ok = await sim.runInstant(); if (!ok) return }
       const csv = await sim.getClient().exportCsv('wide')
-      saveText('congestion_timeseries.csv', csv)
+      saveCsv('congestion_timeseries.csv', csv)
     } catch (e) {
       alert(`CSV 내보내기 실패: ${e}`)
     }
@@ -27,7 +27,7 @@ export function ExportPanel({ sim }: { sim: ReturnType<typeof useSimulation> }) 
     try {
       if (sim.status !== 'done' || sim.dirty) { const ok = await sim.runInstant(); if (!ok) return }
       const csv = await sim.getClient().exportGroupCsv()
-      saveText('congestion_by_group.csv', csv)
+      saveCsv('congestion_by_group.csv', csv)
     } catch (e) {
       alert(`그룹 혼잡도 CSV 내보내기 실패: ${e}`)
     }
@@ -47,6 +47,23 @@ export function ExportPanel({ sim }: { sim: ReturnType<typeof useSimulation> }) 
       saveBlob('gnn_bundle.zip', await bundleToZip(files))
     } catch (e) {
       alert(`GNN 번들 내보내기 실패: ${e}`)
+    }
+  }
+
+  async function exportGnnGroup() {
+    if (busy) return
+    try {
+      if (sim.status !== 'done' || sim.dirty) { const ok = await sim.runInstant(); if (!ok) return }
+      const bundle = await sim.getClient().exportGnnGroup()
+      const files: Record<string, string> = {
+        'adjacency_group.csv': bundle.adjacency,
+        'distance_group.csv': bundle.distance,
+        'travel_time_group.csv': bundle.travel_time,
+        'group_features.csv': bundle.group_features,
+      }
+      saveBlob('gnn_bundle_group.zip', await bundleToZip(files))
+    } catch (e) {
+      alert(`그룹 GNN 번들 내보내기 실패: ${e}`)
     }
   }
 
@@ -91,7 +108,8 @@ export function ExportPanel({ sim }: { sim: ReturnType<typeof useSimulation> }) 
       <div className="row">
         <button onClick={() => void exportCsv()} disabled={busy}>혼잡도 CSV</button>
         <button onClick={() => void exportGroupCsv()} disabled={busy}>그룹 혼잡도 CSV</button>
-        <button onClick={() => void exportGnn()} disabled={busy}>GNN 번들(zip)</button>
+        <button onClick={() => void exportGnn()} disabled={busy}>GNN 번들(노드, zip)</button>
+        <button onClick={() => void exportGnnGroup()} disabled={busy}>GNN 번들(그룹, zip)</button>
         <button onClick={saveConfig}>설정 JSON 저장</button>
         <button onClick={() => fileRef.current?.click()}>설정 불러오기</button>
         <input ref={fileRef} type="file" accept="application/json"
