@@ -140,6 +140,7 @@ export const useStore = create<State>((set, get) => ({
       nodes: p.graph?.nodes ?? [],
       links: p.graph?.links ?? [],
       config: { ...defaultSimConfig(), ...(p.config ?? {}) },
+      positions: {},
     })
     persist(get)
   },

@@ -50,4 +50,12 @@ describe('store', () => {
     expect(useStore.getState().config.seed).toBe(42)
     expect(useStore.getState().nodes[0].id).toBe(a)
   })
+
+  it('resets positions on loadProject', () => {
+    const s = useStore.getState()
+    const a = s.addNode('entrance')
+    expect(useStore.getState().positions[a]).toBeDefined()
+    useStore.getState().loadProject({ nodes: [], links: [] } as never)
+    expect(useStore.getState().positions[a]).toBeUndefined()
+  })
 })
