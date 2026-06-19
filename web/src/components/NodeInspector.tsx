@@ -1,15 +1,17 @@
 import { useStore } from '../store'
 import { NODE_TYPE_LABELS, defaultWeidmann } from '../defaults'
 import type { NodeType, GenerationConfig, TrainConfig } from '../types'
+import { InfoTip } from './InfoTip'
+import { PARAM_HELP } from '../paramHelp'
 
 const TYPES: NodeType[] = [
   'entrance', 'passage', 'stairs', 'escalator', 'elevator', 'gate', 'platform',
 ]
 
-function numField(label: string, value: number, onChange: (v: number) => void) {
+function numField(label: string, value: number, onChange: (v: number) => void, helpKey?: string) {
   return (
     <label className="field">
-      <span>{label}</span>
+      <span>{label}{helpKey && <InfoTip text={PARAM_HELP[helpKey]} />}</span>
       <input
         type="number"
         value={Number.isFinite(value) ? value : 0}
@@ -60,12 +62,20 @@ export function NodeInspector({ nodeId }: { nodeId: string }) {
           {TYPES.map((t) => <option key={t} value={t}>{NODE_TYPE_LABELS[t]}</option>)}
         </select>
       </label>
-      {numField('면적(m²)', node.area, (v) => updateNode(node.id, { area: v }))}
-      {numField('기본 체류확률', node.base_stay_prob, (v) => updateNode(node.id, { base_stay_prob: v }))}
-      {numField('이탈 가중치(exit)', node.exit_weight ?? 0, (v) => updateNode(node.id, { exit_weight: v }))}
-      {numField('초기 인원', node.initial_population ?? 0, (v) => updateNode(node.id, { initial_population: v }))}
+      {numField('면적(m²)', node.area, (v) => updateNode(node.id, { area: v }), 'area')}
+      {numField('기본 체류확률', node.base_stay_prob, (v) => updateNode(node.id, { base_stay_prob: v }), 'base_stay_prob')}
+      {numField('이탈 가중치(exit)', node.exit_weight ?? 0, (v) => updateNode(node.id, { exit_weight: v }), 'exit_weight')}
       <label className="field">
-        <span>혼잡 동적 체류</span>
+        <span>그룹(물리적 zone)<InfoTip text={PARAM_HELP.group} /></span>
+        <input
+          value={node.group ?? ''}
+          placeholder="같은 장소면 동일 이름(빈칸=단독)"
+          onChange={(e) => updateNode(node.id, { group: e.target.value })}
+        />
+      </label>
+      {numField('초기 인원', node.initial_population ?? 0, (v) => updateNode(node.id, { initial_population: v }), 'initial_population')}
+      <label className="field">
+        <span>혼잡 동적 체류<InfoTip text={PARAM_HELP.congestion_enabled} /></span>
         <input
           type="checkbox"
           checked={node.congestion_enabled ?? true}
@@ -74,16 +84,16 @@ export function NodeInspector({ nodeId }: { nodeId: string }) {
       </label>
       <fieldset>
         <legend>Weidmann</legend>
-        {numField('자유속도 v_free', w.v_free, (v) => updateNode(node.id, { weidmann: { ...w, v_free: v } }))}
-        {numField('임계밀도 ρ_max', w.rho_max, (v) => updateNode(node.id, { weidmann: { ...w, rho_max: v } }))}
-        {numField('γ', w.gamma, (v) => updateNode(node.id, { weidmann: { ...w, gamma: v } }))}
+        {numField('자유속도 v_free', w.v_free, (v) => updateNode(node.id, { weidmann: { ...w, v_free: v } }), 'v_free')}
+        {numField('임계밀도 ρ_max', w.rho_max, (v) => updateNode(node.id, { weidmann: { ...w, rho_max: v } }), 'rho_max')}
+        {numField('γ', w.gamma, (v) => updateNode(node.id, { weidmann: { ...w, gamma: v } }), 'gamma')}
       </fieldset>
 
       {isSource && (
         <fieldset>
           <legend>발생 설정</legend>
           <label className="field">
-            <span>분포</span>
+            <span>분포<InfoTip text={PARAM_HELP.generation_kind} /></span>
             <select
               value={gen.kind}
               onChange={(e) => updateNode(node.id, { generation: { ...gen, kind: e.target.value as GenerationConfig['kind'] } })}
@@ -95,12 +105,12 @@ export function NodeInspector({ nodeId }: { nodeId: string }) {
             </select>
           </label>
           {(gen.kind === 'constant' || gen.kind === 'poisson') &&
-            numField('발생률(인/초)', gen.rate ?? 0, (v) => updateNode(node.id, { generation: { ...gen, rate: v } }))}
+            numField('발생률(인/초)', gen.rate ?? 0, (v) => updateNode(node.id, { generation: { ...gen, rate: v } }), 'gen_rate')}
           {gen.kind === 'normal_pulse' && (
             <>
-              {numField('중심시각(초)', gen.center_sec ?? 0, (v) => updateNode(node.id, { generation: { ...gen, center_sec: v } }))}
-              {numField('표준편차(초)', gen.sigma_sec ?? 1, (v) => updateNode(node.id, { generation: { ...gen, sigma_sec: v } }))}
-              {numField('총 인원', gen.total ?? 0, (v) => updateNode(node.id, { generation: { ...gen, total: v } }))}
+              {numField('중심시각(초)', gen.center_sec ?? 0, (v) => updateNode(node.id, { generation: { ...gen, center_sec: v } }), 'gen_center')}
+              {numField('표준편차(초)', gen.sigma_sec ?? 1, (v) => updateNode(node.id, { generation: { ...gen, sigma_sec: v } }), 'gen_sigma')}
+              {numField('총 인원', gen.total ?? 0, (v) => updateNode(node.id, { generation: { ...gen, total: v } }), 'gen_total')}
             </>
           )}
         </fieldset>
@@ -109,12 +119,12 @@ export function NodeInspector({ nodeId }: { nodeId: string }) {
       {node.type === 'platform' && (
         <fieldset>
           <legend>열차(승강장)</legend>
-          {numField('첫 도착(초)', train.first_arrival_sec, (v) => updateNode(node.id, { train: { ...train, first_arrival_sec: v } }))}
-          {numField('배차간격(초)', train.headway_sec, (v) => updateNode(node.id, { train: { ...train, headway_sec: v } }))}
-          {numField('도착 지터σ(초)', train.jitter_sigma_sec ?? 0, (v) => updateNode(node.id, { train: { ...train, jitter_sigma_sec: v } }))}
-          {numField('열차 정원', train.capacity ?? 0, (v) => updateNode(node.id, { train: { ...train, capacity: v } }))}
+          {numField('첫 도착(초)', train.first_arrival_sec, (v) => updateNode(node.id, { train: { ...train, first_arrival_sec: v } }), 'train_first')}
+          {numField('배차간격(초)', train.headway_sec, (v) => updateNode(node.id, { train: { ...train, headway_sec: v } }), 'train_headway')}
+          {numField('도착 지터σ(초)', train.jitter_sigma_sec ?? 0, (v) => updateNode(node.id, { train: { ...train, jitter_sigma_sec: v } }), 'train_jitter')}
+          {numField('열차 정원', train.capacity ?? 0, (v) => updateNode(node.id, { train: { ...train, capacity: v } }), 'train_capacity')}
           <label className="field">
-            <span>하차 분포</span>
+            <span>하차 분포<InfoTip text={PARAM_HELP.alight_kind} /></span>
             <select
               value={train.alight_kind ?? 'constant'}
               onChange={(e) => updateNode(node.id, { train: { ...train, alight_kind: e.target.value as TrainConfig['alight_kind'] } })}
@@ -124,13 +134,13 @@ export function NodeInspector({ nodeId }: { nodeId: string }) {
               <option value="normal">정규</option>
             </select>
           </label>
-          {numField('하차 평균', train.alight_mean ?? 0, (v) => updateNode(node.id, { train: { ...train, alight_mean: v } }))}
+          {numField('하차 평균', train.alight_mean ?? 0, (v) => updateNode(node.id, { train: { ...train, alight_mean: v } }), 'alight_mean')}
           {(train.alight_kind === 'normal') &&
-            numField('하차 표준편차', train.alight_std ?? 0, (v) => updateNode(node.id, { train: { ...train, alight_std: v } }))}
+            numField('하차 표준편차', train.alight_std ?? 0, (v) => updateNode(node.id, { train: { ...train, alight_std: v } }), 'alight_std')}
         </fieldset>
       )}
 
-      <button className="danger" onClick={() => removeNode(node.id)}>노드 삭제</button>
+      <button className="danger" onClick={() => { if (window.confirm(`'${node.name}' 노드와 연결된 링크를 모두 삭제합니다. 계속할까요?`)) removeNode(node.id) }}>노드 삭제</button>
     </div>
   )
 }

@@ -71,3 +71,27 @@ def test_sample_alight_normal_mean_close():
     samples = [sample_alight(cfg, rng, True) for _ in range(3000)]
     assert abs(np.mean(samples) - 100.0) < 2.0
     assert min(samples) >= 0.0  # 음수 클립
+
+
+# FIX 1: headway_sec <= 0 무한루프 방지
+def test_train_arrival_steps_headway_zero_returns_at_most_one():
+    """headway_sec=0 이면 최대 1개 스텝만 반환하고 무한루프가 걸리지 않아야 한다."""
+    import signal
+
+    def _timeout_handler(signum, frame):
+        raise TimeoutError("train_arrival_steps hung (infinite loop)")
+
+    cfg = TrainConfig(first_arrival_sec=60, headway_sec=0)
+    rng = np.random.default_rng(0)
+    # 시간 제한 없이 그냥 호출 — 무한루프 시 pytest timeout 또는 OS로 잡힘
+    # Windows에서 signal.alarm 없으므로 직접 실행하고 길이만 확인
+    steps = train_arrival_steps(cfg, dt=5.0, duration_sec=700, rng=rng, stochastic=False)
+    assert len(steps) <= 1, f"headway=0일 때 스텝이 1개를 초과함: {steps}"
+
+
+def test_train_arrival_steps_headway_negative_returns_at_most_one():
+    """headway_sec < 0 이면 최대 1개 스텝만 반환하고 무한루프가 걸리지 않아야 한다."""
+    cfg = TrainConfig(first_arrival_sec=60, headway_sec=-10)
+    rng = np.random.default_rng(0)
+    steps = train_arrival_steps(cfg, dt=5.0, duration_sec=700, rng=rng, stochastic=False)
+    assert len(steps) <= 1, f"headway<0일 때 스텝이 1개를 초과함: {steps}"

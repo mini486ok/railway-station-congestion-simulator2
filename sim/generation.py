@@ -72,6 +72,18 @@ def train_arrival_steps(cfg: TrainConfig, dt: float, duration_sec: float,
     """주기적 배차(+선택적 정규 지터)를 이산 스텝 집합으로 변환."""
     steps: set[int] = set()
     t = cfg.first_arrival_sec
+
+    # headway_sec <= 0 이면 첫 도착만 등록하고 즉시 반환 (무한루프 방지)
+    if cfg.headway_sec <= 0:
+        jitter = 0.0
+        if stochastic and cfg.jitter_sigma_sec > 0:
+            jitter = float(rng.normal(0.0, cfg.jitter_sigma_sec))
+        arrival = max(0.0, t + jitter)
+        step = int(round(arrival / dt))
+        if 0 <= step <= round(duration_sec / dt):
+            steps.add(step)
+        return steps
+
     while t <= duration_sec + 1e-9:
         jitter = 0.0
         if stochastic and cfg.jitter_sigma_sec > 0:

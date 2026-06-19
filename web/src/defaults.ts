@@ -34,7 +34,7 @@ export function makeNode(type: NodeType, id: string): StationNode {
   const node: StationNode = {
     id, name: id, type, area: 50.0, base_stay_prob: 0.3,
     congestion_enabled: d.congestion, weidmann: defaultWeidmann(d.v_free),
-    initial_population: 0.0, exit_weight: 0.0, generation: null, train: null,
+    initial_population: 0.0, exit_weight: 0.0, group: '', generation: null, train: null,
   }
   if (type === 'entrance') node.generation = { kind: 'poisson', rate: 1.0 }
   if (type === 'platform') {

@@ -3,10 +3,17 @@ from __future__ import annotations
 
 import json
 
-from sim.io import load_config, history_to_csv, gnn_bundle
+from sim.io import load_config, history_to_csv, gnn_bundle, history_by_group
 from sim.engine import Engine
 
 _engine: Engine | None = None
+
+
+def _require_engine() -> Engine:
+    """엔진이 초기화되지 않았으면 명시적 RuntimeError를 발생시킨다."""
+    if _engine is None:
+        raise RuntimeError("load()를 먼저 호출하세요.")
+    return _engine
 
 
 def validate(config_text: str) -> str:
@@ -15,8 +22,8 @@ def validate(config_text: str) -> str:
 
 
 def _snapshot_text() -> str:
-    assert _engine is not None
-    return json.dumps(_engine.snapshot(), ensure_ascii=False)
+    eng = _require_engine()
+    return json.dumps(eng.snapshot(), ensure_ascii=False)
 
 
 def load(config_text: str) -> str:
@@ -25,32 +32,45 @@ def load(config_text: str) -> str:
     errors = graph.validate()
     if errors:
         raise ValueError("; ".join(errors))
+    # FIX 2: dt_seconds/duration_seconds 유효성 검사
+    if config.dt_seconds <= 0 or config.duration_seconds <= 0:
+        raise ValueError("dt_seconds와 duration_seconds는 0보다 커야 합니다")
     _engine = Engine(graph, config)
+    # 유효 그룹 레이블: group 있으면 그대로, 없으면 node.id
+    node_map = {nd.id: nd for nd in graph.nodes}
+    effective_groups = [
+        node_map[nid].group if node_map[nid].group else nid
+        for nid in _engine.node_ids
+    ]
     return json.dumps(
-        {"node_ids": _engine.node_ids, "num_steps": _engine.num_steps},
+        {
+            "node_ids": _engine.node_ids,
+            "num_steps": _engine.num_steps,
+            "groups": effective_groups,
+        },
         ensure_ascii=False,
     )
 
 
 def step(n: int) -> str:
-    assert _engine is not None
+    eng = _require_engine()
     for _ in range(int(n)):
-        if _engine.t >= _engine.num_steps:
+        if eng.t >= eng.num_steps:
             break
-        _engine.step()
-        _engine.history[_engine.t] = _engine.N
+        eng.step()
+        eng.history[eng.t] = eng.N
     return _snapshot_text()
 
 
 def run_all() -> str:
-    assert _engine is not None
-    _engine.run()
+    eng = _require_engine()
+    eng.run()
     return _snapshot_text()
 
 
 def reset() -> str:
-    assert _engine is not None
-    _engine.reset()
+    eng = _require_engine()
+    eng.reset()
     return _snapshot_text()
 
 
@@ -59,20 +79,33 @@ def snapshot() -> str:
 
 
 def export_csv(layout: str = "wide") -> str:
-    assert _engine is not None
-    return history_to_csv(_engine.history, _engine.node_ids,
-                          _engine.config.dt_seconds, layout)
+    eng = _require_engine()
+    return history_to_csv(eng.history, eng.node_ids,
+                          eng.config.dt_seconds, layout)
 
 
 def export_gnn() -> str:
-    assert _engine is not None
-    return json.dumps(gnn_bundle(_engine.graph), ensure_ascii=False)
+    eng = _require_engine()
+    return json.dumps(gnn_bundle(eng.graph), ensure_ascii=False)
+
+
+def export_group_csv() -> str:
+    """그룹별 혼잡도(인원 합) 시계열 CSV 를 반환한다."""
+    eng = _require_engine()
+    node_map = {nd.id: nd for nd in eng.graph.nodes}
+    effective_groups = [
+        node_map[nid].group if node_map[nid].group else nid
+        for nid in eng.node_ids
+    ]
+    return history_by_group(
+        eng.history, eng.node_ids, effective_groups, eng.config.dt_seconds
+    )
 
 
 def history_json() -> str:
-    assert _engine is not None
+    eng = _require_engine()
     return json.dumps({
-        "node_ids": _engine.node_ids,
-        "dt": _engine.config.dt_seconds,
-        "values": [[float(x) for x in row] for row in _engine.history],
+        "node_ids": eng.node_ids,
+        "dt": eng.config.dt_seconds,
+        "values": [[float(x) for x in row] for row in eng.history],
     }, ensure_ascii=False)

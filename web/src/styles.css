@@ -18,3 +18,22 @@ input, select { padding: 4px; }
 .validation.err { background: #fdeaea; color: #911; white-space: pre-wrap; }
 .metrics { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; margin-bottom: 8px; }
 progress { width: 200px; }
+.infotip { position: relative; display: inline-block; margin-left: 4px; }
+.infotip-btn { all: unset; cursor: pointer; color: #2a6; font-size: 12px; line-height: 1; padding: 0 2px; }
+.infotip-btn:hover { color: #084; }
+.infotip-pop { position: absolute; left: 0; top: 18px; z-index: 50; width: 220px;
+  background: #1a2b3c; color: #fff; padding: 8px 10px; border-radius: 6px;
+  font-size: 12px; line-height: 1.4; box-shadow: 0 4px 12px rgba(0,0,0,.25); font-weight: 400; }
+.tabs { display: flex; gap: 6px; margin-left: auto; }
+.tabs button { background: #163a5f; color: #cfe; border: 1px solid #2a5a8a; }
+.tabs button.active { background: #2a6; color: #fff; border-color: #2a6; }
+.guide { padding: 16px 24px; max-width: 900px; overflow: auto; line-height: 1.6; }
+.guide h2 { margin-top: 0; } .guide h3 { margin-top: 20px; }
+.guide pre { background: #0f1f2e; color: #d6e6f5; padding: 10px 12px; border-radius: 6px; overflow:auto; font-size: 12px; }
+.guide-view { flex: 1; min-height: 0; overflow: auto; }
+/* FIX N: toggle button active state */
+.toggle-btn { padding: 2px 10px; }
+.toggle-btn.active { background: #2a6; color: #fff; border-color: #2a6; font-weight: bold; }
+/* FIX O: responsive layout */
+@media (max-width: 1200px){ .layout{ grid-template-columns: 1fr 1fr; } }
+@media (max-width: 820px){ .layout{ grid-template-columns: 1fr; } }

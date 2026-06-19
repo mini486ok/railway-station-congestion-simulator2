@@ -33,6 +33,7 @@ export interface StationNode {
   weidmann?: WeidmannParams
   initial_population?: number
   exit_weight?: number
+  group?: string
   generation?: GenerationConfig | null
   train?: TrainConfig | null
 }

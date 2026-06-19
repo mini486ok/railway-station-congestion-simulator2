@@ -5,6 +5,7 @@ export function ValidationBanner() {
   const nodes = useStore((s) => s.nodes)
   const links = useStore((s) => s.links)
   const errors = validateGraph({ nodes, links })
+  if (nodes.length === 0) return <div className="validation">노드를 추가해 역 구조를 만드세요.</div>
   if (errors.length === 0) return <div className="validation ok">검증 통과 ✓</div>
   return (
     <div className="validation err">
