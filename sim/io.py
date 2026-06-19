@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 import numpy as np
+from dataclasses import asdict
 
-from sim.model import StationGraph
+from sim.model import StationGraph, SimConfig
 
 
 def history_to_csv(history: np.ndarray, node_ids: list[str],
@@ -53,3 +55,26 @@ def gnn_bundle(graph: StationGraph) -> dict[str, str]:
         "travel_time": matrix_csv(tt),
         "node_features": "\n".join(feat_rows) + "\n",
     }
+
+
+def save_config(graph: StationGraph, config: SimConfig) -> str:
+    return json.dumps({"graph": graph.to_json(), "config": asdict(config)},
+                      ensure_ascii=False, indent=2)
+
+
+def load_config(text: str) -> tuple[StationGraph, SimConfig]:
+    data = json.loads(text)
+    graph = StationGraph.from_json(data["graph"])
+    config = SimConfig(**data["config"])
+    return graph, config
+
+
+def apply_observation_noise(history: np.ndarray, config: SimConfig, rng) -> np.ndarray:
+    out = history.copy()
+    if config.observation_noise_std > 0:
+        out = out + rng.normal(0.0, config.observation_noise_std, size=out.shape)
+        out = np.clip(out, 0.0, None)
+    if config.missing_prob > 0:
+        mask = rng.random(out.shape) < config.missing_prob
+        out[mask] = np.nan
+    return out
