@@ -1,3 +1,10 @@
 node_modules/
 dist/
 public/pysim/
+
+# build artifacts
+*.tsbuildinfo
+vite.config.d.ts
+vite.config.js
+test-results/
+playwright-report/
