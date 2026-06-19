@@ -4,6 +4,7 @@ const TOL = 1e-6
 const SOURCE_TYPES = new Set(['entrance', 'platform'])
 const VALID_GEN_KINDS = new Set(['constant', 'poisson', 'normal_pulse', 'none'])
 const VALID_ALIGHT_KINDS = new Set(['constant', 'poisson', 'normal'])
+const VALID_TRAIN_MODES = new Set(['both', 'alight', 'board'])
 
 // 계획1 StationGraph.validate 와 동일 규칙 (즉시 GUI 피드백용)
 export function validateGraph(graph: StationGraphJSON): string[] {
@@ -61,6 +62,21 @@ export function validateGraph(graph: StationGraphJSON): string[] {
     if (n.type === 'platform' && !n.train) errors.push(`노드 ${n.id}: 승강장은 열차 설정(train)이 필요`)
     if (n.type !== 'platform' && n.train) errors.push(`노드 ${n.id}: 열차 설정은 승강장만 가능`)
 
+    // elevator validation (Python core 미러)
+    if (n.type === 'elevator') {
+      if (!n.elevator) {
+        errors.push(`노드 ${n.id}: 엘리베이터는 용량/속력 설정이 필요`)
+      } else {
+        if (!(n.elevator.capacity > 0)) errors.push(`노드 ${n.id}: 엘리베이터 용량은 0보다 커야 함`)
+        if (!(n.elevator.speed >= 1)) errors.push(`노드 ${n.id}: 엘리베이터 속력(주기)은 1 이상이어야 함`)
+      }
+      if (n.train) errors.push(`노드 ${n.id}: 엘리베이터는 열차 설정을 가질 수 없음`)
+      if (n.generation) errors.push(`노드 ${n.id}: 엘리베이터는 발생 설정을 가질 수 없음`)
+    }
+    if (n.type !== 'elevator' && n.elevator) {
+      errors.push(`노드 ${n.id}: 엘리베이터 설정은 엘리베이터 노드만 가능`)
+    }
+
     // platform train validations
     if (n.type === 'platform' && n.train) {
       const train = n.train
@@ -70,6 +86,9 @@ export function validateGraph(graph: StationGraphJSON): string[] {
       if (train.alight_kind !== undefined && !VALID_ALIGHT_KINDS.has(train.alight_kind)) {
         errors.push(`노드 ${n.id}: alight_kind가 올바르지 않음`)
       }
+      if (train.mode !== undefined && train.mode !== null && !VALID_TRAIN_MODES.has(train.mode)) {
+        errors.push(`노드 ${n.id}: train.mode는 both/alight/board 중 하나여야 함`)
+      }
     }
   }
 
@@ -77,9 +96,14 @@ export function validateGraph(graph: StationGraphJSON): string[] {
   for (const [g, nodes] of Object.entries(groupNodes)) {
     if (nodes.length <= 1) continue
 
-    const platforms = nodes.filter((n) => n.type === 'platform')
-    if (platforms.length > 1) {
-      errors.push(`그룹 '${g}': 한 그룹에 승강장이 2개 이상 포함될 수 없음`)
+    // alight 역할 = train.mode 가 'both'/'alight' 또는 누락(undefined/null=both 취급)
+    const alightPlatforms = nodes.filter(
+      (n) => n.type === 'platform' &&
+        (n.train?.mode === undefined || n.train?.mode === null ||
+          n.train?.mode === 'both' || n.train?.mode === 'alight')
+    )
+    if (alightPlatforms.length > 1) {
+      errors.push(`그룹 '${g}': 한 그룹에 하차(alight) 승강장이 2개 이상 포함될 수 없음`)
     }
 
     // mixed congestion_enabled (treat undefined as true)

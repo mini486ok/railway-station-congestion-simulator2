@@ -28,4 +28,7 @@ export const PARAM_HELP: Record<string, string> = {
   seed: '난수 시드. 같은 시드 + 같은 설정이면 결과가 동일하게 재현됩니다.',
   stochastic: '켜면 이용자 발생/하차 등을 확률 분포에서 무작위 표본추출합니다. 끄면 기대값으로 결정론적 계산.',
   speed: '재생 속도. 초당 진행하는 시뮬레이션 스텝 수.',
+  elevator_capacity: '엘리베이터가 1회 운송하는 최대 인원. speed slot마다 이 인원만큼 출력 노드로 이동합니다.',
+  elevator_speed: '엘리베이터 출발 주기(이산 시간 slot 수). 이 slot 수가 지날 때까지 전원 대기하다가, 도달하면 용량만큼 한 번에 이동합니다.',
+  train_mode: '승강장 열차 역할. both=하차+탑승, alight=하차(발생)만, board=탑승(정원만큼 시스템 이탈)만. 한 승강장을 승차/하차 노드로 나눌 때 각각 board/alight로 설정하고 같은 배차·그룹으로 묶으세요.',
 }

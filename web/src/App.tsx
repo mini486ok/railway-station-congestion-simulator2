@@ -15,6 +15,7 @@ import { BatchPanel } from './components/BatchPanel'
 import { SAMPLE_TEMPLATES, loadTemplate } from './templates'
 import { listUserTemplates, saveUserTemplate, deleteUserTemplate } from './userTemplates'
 import type { NamedTemplate } from './userTemplates'
+import { listHidden, hideBuiltin, restoreHidden } from './hiddenTemplates'
 import { UsageGuide } from './components/UsageGuide'
 import { OutputGuide } from './components/OutputGuide'
 
@@ -26,7 +27,12 @@ export default function App() {
   const [userTemplates, setUserTemplates] = useState<NamedTemplate[]>(listUserTemplates)
   const [selectedValue, setSelectedValue] = useState<string>('')
   const [view, setView] = useState<'sim' | 'usage' | 'output'>('sim')
+  const [hidden, setHidden] = useState<string[]>(listHidden)
   const sim = useSimulation()
+
+  const isBuiltinSelected = selectedValue.startsWith('builtin:')
+  const selectedBuiltinName = isBuiltinSelected ? selectedValue.slice('builtin:'.length) : ''
+  const visibleBuiltins = SAMPLE_TEMPLATES.filter((t) => !hidden.includes(t.name))
 
   return (
     <ReactFlowProvider>
@@ -51,7 +57,7 @@ export default function App() {
               >
                 <option value="" disabled>예제 템플릿 불러오기…</option>
                 <optgroup label="기본 예제">
-                  {SAMPLE_TEMPLATES.map((t) => (
+                  {visibleBuiltins.map((t) => (
                     <option key={t.name} value={`builtin:${t.name}`}>{t.name}</option>
                   ))}
                 </optgroup>
@@ -63,6 +69,35 @@ export default function App() {
                   </optgroup>
                 )}
               </select>
+
+              {/* 이 예제 숨기기 */}
+              <button
+                disabled={!isBuiltinSelected}
+                onClick={() => {
+                  if (selectedBuiltinName) {
+                    const next = hideBuiltin(selectedBuiltinName)
+                    setHidden(next)
+                    setSelectedValue('')
+                  }
+                }}
+                title="현재 선택한 기본 예제를 드롭다운에서 숨기기"
+              >
+                이 예제 숨기기
+              </button>
+
+              {/* 숨긴 예제 복원 (숨긴 예제 있을 때만 노출) */}
+              {hidden.length > 0 && (
+                <button
+                  onClick={() => {
+                    const next = restoreHidden()
+                    setHidden(next)
+                  }}
+                  title="숨긴 기본 예제를 모두 복원"
+                >
+                  숨긴 예제 복원
+                </button>
+              )}
+
               <button
                 onClick={() => {
                   const name = prompt('템플릿 이름을 입력하세요')

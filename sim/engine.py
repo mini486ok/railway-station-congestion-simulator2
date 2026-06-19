@@ -56,6 +56,13 @@ class Engine:
             if nd.type == NodeType.PLATFORM and nd.train is not None:
                 self.train_cfg[i] = nd.train
 
+        # 엘리베이터 설정(정적)
+        self.elevator_cfg: dict[int, object] = {
+            i: nd.elevator
+            for i, nd in enumerate(graph.nodes)
+            if nd.type == NodeType.ELEVATOR and nd.elevator is not None
+        }
+
         self.num_steps = int(round(self.config.duration_seconds / self.config.dt_seconds))
         self.reset()
 
@@ -91,6 +98,15 @@ class Engine:
         s = self.t
         move_prob = self._move_prob()  # 혼잡도 기반 동적 이동확률
         movers = self.N * move_prob
+
+        # 엘리베이터 배치 운송: 일반 이동확률을 무시하고 주기별로 capacity만큼 유출
+        for i, cfg in self.elevator_cfg.items():
+            spd = max(1, int(cfg.speed))
+            if (s + 1) % spd == 0:
+                movers[i] = min(cfg.capacity, max(self.N[i], 0.0))
+            else:
+                movers[i] = 0.0
+
         newN = self.N - movers  # 잔류(stayers)
 
         # 유출 분배(링크 + exit sink): 도착시각(s+τ)으로 적재
@@ -121,16 +137,19 @@ class Engine:
                 newN[i] += g
                 self.total_generated += g
 
-        # 승강장 열차 이벤트: 탑승(sink) 먼저 → 하차(source) 나중
+        # 승강장 열차 이벤트: mode에 따라 탑승(sink)/하차(source) 선택
         for i, steps in self.train_steps.items():
             if self.t in steps:
                 cfg = self.train_cfg[i]
-                board = min(cfg.capacity, max(newN[i], 0.0))
-                newN[i] -= board
-                self.total_exited += board
-                alight = sample_alight(cfg, self.rng, self.config.stochastic)
-                newN[i] += alight
-                self.total_generated += alight
+                mode = getattr(cfg, "mode", "both")
+                if mode in ("both", "board"):
+                    board = min(cfg.capacity, max(newN[i], 0.0))
+                    newN[i] -= board
+                    self.total_exited += board
+                if mode in ("both", "alight"):
+                    alight = sample_alight(cfg, self.rng, self.config.stochastic)
+                    newN[i] += alight
+                    self.total_generated += alight
 
         self.N = newN
         self.t += 1
