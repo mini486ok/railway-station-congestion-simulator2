@@ -84,3 +84,40 @@ def test_gnn_bundle_plain_node_features_unquoted():
     bundle = gnn_bundle(g)
     feat_lines = bundle["node_features"].strip().splitlines()
     assert feat_lines[1] == "A,입구,entrance,50.0,", f"일반 값이 변경됨: {feat_lines[1]}"
+
+
+# ─────────────────────────────────────────────
+# FIX 5: _csv_field leading-whitespace formula guard
+# ─────────────────────────────────────────────
+
+def test_csv_field_leading_whitespace_formula_guarded():
+    """공백 후 = 로 시작하는 값(예: '  =SUM(A1)')에도 apostrophe가 앞에 붙어야 한다."""
+    hist = np.array([[5.0]])
+    csv = history_to_csv(hist, ["  =SUM(A1)"], dt_seconds=5.0, layout="wide")
+    lines = csv.strip().splitlines()
+    # 헤더에 apostrophe가 포함되어야 함
+    assert "'  =SUM(A1)" in lines[0] or lines[0].startswith("step,time_sec,'"), \
+        f"leading whitespace 수식 주입 방지 안 됨: {lines[0]}"
+
+
+def test_csv_field_leading_whitespace_plus_formula_guarded():
+    """공백 후 + 로 시작하는 값에도 apostrophe가 붙어야 한다."""
+    hist = np.array([[1.0]])
+    csv = history_to_csv(hist, ["  +CMD"], dt_seconds=1.0, layout="wide")
+    lines = csv.strip().splitlines()
+    assert "'  +CMD" in lines[0], f"leading whitespace + 수식 주입 방지 안 됨: {lines[0]}"
+
+
+def test_csv_field_plain_leading_whitespace_unchanged():
+    """공백 후 일반 문자 시작은 apostrophe 없이 그대로 출력돼야 한다."""
+    from sim.io import _csv_field
+    # leading whitespace + 일반 문자
+    result = _csv_field("  hello")
+    # 수식 트리거 없으므로 apostrophe 없어야 함
+    assert result == "  hello", f"일반 leading whitespace 값이 변경됨: {result}"
+
+
+def test_csv_field_empty_string_unchanged():
+    """빈 문자열은 그대로 빈 문자열로 반환되어야 한다."""
+    from sim.io import _csv_field
+    assert _csv_field("") == ""

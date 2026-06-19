@@ -127,7 +127,7 @@ class StationGraph:
             steps = round(l.distance / (v * config.dt_seconds))
             l.travel_time = max(1, int(steps))
 
-    def validate(self, tol: float = 1e-6) -> list[str]:
+    def validate(self, tol: float = 1e-6, duration_seconds: float | None = None) -> list[str]:
         errors: list[str] = []
         ids = {n.id for n in self.nodes}
         out_weight: dict[str, float] = {n.id: 0.0 for n in self.nodes}
@@ -154,6 +154,10 @@ class StationGraph:
                 errors.append(f"노드 {n.id}: 면적은 0보다 커야 함")
             if not (0.0 <= n.exit_weight <= 1.0):
                 errors.append(f"노드 {n.id}: exit_weight는 [0,1]")
+
+            # FIX 2: initial_population 음수 검사
+            if n.initial_population < 0:
+                errors.append(f"노드 {n.id}: 초기 인원은 0 이상이어야 함")
 
             total_out = out_weight[n.id] + n.exit_weight
             has_outflow = out_count[n.id] > 0 or n.exit_weight > 0
@@ -182,6 +186,26 @@ class StationGraph:
                     errors.append(f"노드 {n.id}: first_arrival_sec는 0 이상이어야 함")
                 if train.capacity < 0:
                     errors.append(f"노드 {n.id}: capacity(열차 정원)는 0 이상이어야 함")
+                # FIX 2: alight_kind 유효성 검사
+                if train.alight_kind not in ("constant", "poisson", "normal"):
+                    errors.append(f"노드 {n.id}: 하차 분포는 constant/poisson/normal 중 하나")
+
+            # FIX 2: generation.kind 유효성 검사
+            if n.generation is not None:
+                if n.generation.kind not in ("constant", "poisson", "normal_pulse", "none"):
+                    errors.append(f"노드 {n.id}: 발생 분포 종류가 올바르지 않음")
+
+            # FIX 3: NormalPulse 잘림 경고 (duration_seconds 제공 시)
+            if (duration_seconds is not None
+                    and n.generation is not None
+                    and n.generation.kind == "normal_pulse"):
+                gen = n.generation
+                if (gen.center_sec - 3 * gen.sigma_sec < 0
+                        or gen.center_sec + 3 * gen.sigma_sec > duration_seconds):
+                    errors.append(
+                        f"노드 {n.id}: 정규펄스가 시뮬레이션 구간[0,{duration_seconds}]을"
+                        f" 벗어나 총 발생 인원이 total보다 적을 수 있음"
+                    )
 
         # 그룹 일관성 검사 (group 필드가 비어 있지 않은 노드만 대상)
         from collections import defaultdict
@@ -203,5 +227,18 @@ class StationGraph:
                 errors.append(
                     f"그룹 '{g}': 그룹 내 노드의 '혼잡 동적 체류' 설정이 일치해야 합니다"
                 )
+            # FIX 1: 그룹 내 Weidmann 파라미터 일관성 검사 (once per group)
+            if len(members) > 1:
+                first = members[0].weidmann
+                mixed = any(
+                    abs(m.weidmann.v_free - first.v_free) > tol
+                    or abs(m.weidmann.rho_max - first.rho_max) > tol
+                    or abs(m.weidmann.gamma - first.gamma) > tol
+                    for m in members[1:]
+                )
+                if mixed:
+                    errors.append(
+                        f"그룹 '{g}': 그룹 내 노드의 Weidmann 파라미터(v_free/rho_max/gamma)가 일치해야 합니다"
+                    )
 
         return errors

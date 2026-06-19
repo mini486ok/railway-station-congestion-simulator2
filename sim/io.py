@@ -15,7 +15,8 @@ def _csv_field(value) -> str:
     - 특수문자 없는 일반 값은 그대로 반환(backward-compat)
     """
     s = str(value)
-    if s and s[0] in ('=', '+', '-', '@'):
+    stripped = s.lstrip()
+    if stripped and stripped[0] in ('=', '+', '-', '@'):
         s = "'" + s
     if any(c in s for c in (',', '"', '\n', '\r')):
         s = '"' + s.replace('"', '""') + '"'
