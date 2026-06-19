@@ -27,7 +27,7 @@ export function LinkInspector({ index }: { index: number }) {
           onChange={(e) => updateLink(index, { travel_time: parseInt(e.target.value, 10) })} />
       </label>
       <button onClick={() => normalize(link.source)}>출력 가중치 정규화(합=1)</button>
-      <button className="danger" onClick={() => removeLink(index)}>링크 삭제</button>
+      <button className="danger" onClick={() => { if (window.confirm('이 링크를 삭제할까요?')) removeLink(index) }}>링크 삭제</button>
     </div>
   )
 }

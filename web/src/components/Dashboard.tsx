@@ -2,17 +2,20 @@ import { useEffect, useRef, useState } from 'react'
 import Plotly from 'plotly.js-dist-min'
 import { buildSeries, buildGroupSeries } from '../chartData'
 import type { useSimulation } from '../useSimulation'
+import { useStore } from '../store'
 
 export function Dashboard({ sim }: { sim: ReturnType<typeof useSimulation> }) {
   const ref = useRef<HTMLDivElement>(null)
   const [byGroup, setByGroup] = useState(false)
   const [allHidden, setAllHidden] = useState(false)
+  const storeNodes = useStore((s) => s.nodes)
+  const nameMap: Record<string, string> = Object.fromEntries(storeNodes.map((n) => [n.id, n.name]))
 
   // FIX G: data-update effect — NO purge in cleanup (prevents zoom/legend reset on every update)
   useEffect(() => {
     if (!ref.current) return
     const node = ref.current
-    const series = byGroup ? buildGroupSeries(sim.history, sim.nodeGroups) : buildSeries(sim.history)
+    const series = byGroup ? buildGroupSeries(sim.history, sim.nodeGroups) : buildSeries(sim.history, nameMap)
     const traces = series.map((s) => ({
       x: s.x, y: s.y, name: s.node, type: 'scatter' as const, mode: 'lines' as const,
       visible: allHidden ? 'legendonly' as const : true as const,
@@ -26,7 +29,7 @@ export function Dashboard({ sim }: { sim: ReturnType<typeof useSimulation> }) {
       yaxis: { title: '혼잡도(인원수)' },
       showlegend: true,
     }, { responsive: true, displaylogo: false, scrollZoom: true })
-  }, [sim.history, byGroup, allHidden, sim.nodeGroups])
+  }, [sim.history, byGroup, allHidden, sim.nodeGroups, storeNodes])
 
   // FIX G: unmount-only purge effect
   useEffect(() => () => { if (ref.current) Plotly.purge(ref.current) }, [])
@@ -52,9 +55,9 @@ export function Dashboard({ sim }: { sim: ReturnType<typeof useSimulation> }) {
           >노드별</button>
           <button
             onClick={() => setByGroup(true)}
-            disabled={sim.nodeGroups.length === 0}
             className={`toggle-btn${byGroup ? ' active' : ''}`}
-            style={{ borderRadius: '0 4px 4px 0', cursor: sim.nodeGroups.length === 0 ? 'not-allowed' : 'pointer', opacity: sim.nodeGroups.length === 0 ? 0.5 : 1 }}
+            title="실행 후 그룹 집계가 반영됩니다"
+            style={{ borderRadius: '0 4px 4px 0', cursor: 'pointer' }}
           >그룹별</button>
         </div>
         <button onClick={() => setAllHidden(false)} className={`toggle-btn${!allHidden ? ' active' : ''}`}>전체 표시</button>

@@ -40,14 +40,15 @@ export function SimControls({ sim }: { sim: ReturnType<typeof useSimulation> }) 
       <div className="row">
         <label>배속 {sim.speed} step/s<InfoTip text={PARAM_HELP.speed} />
           <input type="range" min={1} max={200} value={sim.speed}
+            disabled={isLoading}
             onChange={(e) => sim.setSpeed(parseInt(e.target.value, 10))} />
         </label>
       </div>
       <div className="row">
         <button onClick={() => void sim.play()} disabled={isLoading || sim.status === 'running'}>▶ 재생</button>
         <button onClick={() => sim.pause()} disabled={sim.status !== 'running'}>⏸ 일시정지</button>
-        <button onClick={() => void sim.stepOnce()} disabled={isLoading}>⏭ 한 스텝</button>
-        <button onClick={() => void sim.reset()}>⟲ 리셋</button>
+        <button onClick={() => void sim.stepOnce()} disabled={isLoading || sim.status === 'running'}>⏭ 한 스텝</button>
+        <button onClick={() => void sim.reset()} disabled={isLoading}>⟲ 리셋</button>
         <button onClick={() => void sim.runInstant()} disabled={isLoading}>⚡ 즉시 실행</button>
       </div>
       {isLoading ? (

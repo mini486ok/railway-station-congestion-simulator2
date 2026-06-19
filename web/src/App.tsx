@@ -95,6 +95,7 @@ export default function App() {
           {/* FIX K: tab ARIA */}
           <div className="tabs" role="tablist">
             <button
+              id="tab-sim"
               role="tab"
               aria-selected={view === 'sim'}
               className={view === 'sim' ? 'active' : ''}
@@ -103,6 +104,7 @@ export default function App() {
               시뮬레이터
             </button>
             <button
+              id="tab-usage"
               role="tab"
               aria-selected={view === 'usage'}
               className={view === 'usage' ? 'active' : ''}
@@ -111,6 +113,7 @@ export default function App() {
               사용법
             </button>
             <button
+              id="tab-output"
               role="tab"
               aria-selected={view === 'output'}
               className={view === 'output' ? 'active' : ''}
@@ -120,7 +123,7 @@ export default function App() {
             </button>
           </div>
         </header>
-        <div role="tabpanel">
+        <div role="tabpanel" aria-labelledby={`tab-${view}`}>
         {view === 'sim' && (
           <div className="layout">
             <section className="left">

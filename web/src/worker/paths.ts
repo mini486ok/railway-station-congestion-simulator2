@@ -1,4 +1,4 @@
-export const PYODIDE_INDEX_URL = 'https://cdn.jsdelivr.net/pyodide/v0.26.2/full/'
+export const PYODIDE_INDEX_URL = import.meta.env.VITE_PYODIDE_CDN ?? 'https://cdn.jsdelivr.net/pyodide/v0.26.2/full/'
 
 // sim 패키지 파일 (의존성 순서 무관, import 시 해석됨)
 export const SIM_FILES = [

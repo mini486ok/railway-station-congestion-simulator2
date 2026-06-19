@@ -19,6 +19,17 @@ describe('buildSeries', () => {
   it('returns empty for empty history', () => {
     expect(buildSeries([])).toEqual([])
   })
+  it('uses nameMap to display node names instead of ids', () => {
+    const series = buildSeries(hist, { A: '입구', B: '승강장' })
+    expect(series.map((s) => s.node)).toEqual(['입구', '승강장'])
+    const a = series.find((s) => s.node === '입구')!
+    expect(a.y).toEqual([0, 10, 15])
+  })
+  it('falls back to id when nameMap does not contain the id', () => {
+    const series = buildSeries(hist, { A: '입구' })
+    expect(series.find((s) => s.node === '입구')).toBeDefined()
+    expect(series.find((s) => s.node === 'B')).toBeDefined()
+  })
 })
 
 describe('buildGroupSeries', () => {

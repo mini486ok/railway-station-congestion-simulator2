@@ -140,7 +140,7 @@ export function NodeInspector({ nodeId }: { nodeId: string }) {
         </fieldset>
       )}
 
-      <button className="danger" onClick={() => removeNode(node.id)}>노드 삭제</button>
+      <button className="danger" onClick={() => { if (window.confirm(`'${node.name}' 노드와 연결된 링크를 모두 삭제합니다. 계속할까요?`)) removeNode(node.id) }}>노드 삭제</button>
     </div>
   )
 }

@@ -10,7 +10,7 @@ export function toFlowNodes(
   return nodes.map((n, i) => ({
     id: n.id,
     position: positions[n.id] ?? { x: 80 + i * 60, y: 80 + (i % 3) * 60 },
-    data: { label: `${n.name}\n[${NODE_TYPE_LABELS[n.type]}]` },
+    data: { label: `${n.name} · ${NODE_TYPE_LABELS[n.type]}` },
     selected: n.id === selectedId,
     type: 'default',
   }))
