@@ -24,3 +24,10 @@ progress { width: 200px; }
 .infotip-pop { position: absolute; left: 0; top: 18px; z-index: 50; width: 220px;
   background: #1a2b3c; color: #fff; padding: 8px 10px; border-radius: 6px;
   font-size: 12px; line-height: 1.4; box-shadow: 0 4px 12px rgba(0,0,0,.25); font-weight: 400; }
+.tabs { display: flex; gap: 6px; margin-left: auto; }
+.tabs button { background: #163a5f; color: #cfe; border: 1px solid #2a5a8a; }
+.tabs button.active { background: #2a6; color: #fff; border-color: #2a6; }
+.guide { padding: 16px 24px; max-width: 900px; overflow: auto; line-height: 1.6; }
+.guide h2 { margin-top: 0; } .guide h3 { margin-top: 20px; }
+.guide pre { background: #0f1f2e; color: #d6e6f5; padding: 10px 12px; border-radius: 6px; overflow:auto; font-size: 12px; }
+.guide-view { flex: 1; min-height: 0; overflow: auto; }
