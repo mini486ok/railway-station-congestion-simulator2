@@ -98,13 +98,27 @@ def _passage_node(nid: str, group: str = "", congestion_enabled: bool = True) ->
                 exit_weight=0.0, group=group, congestion_enabled=congestion_enabled)
 
 
-def test_group_two_platforms_raises_error():
-    """한 그룹에 PLATFORM이 2개 이상이면 validate() 오류를 반환해야 한다."""
+def test_group_two_alight_platforms_raises_error():
+    """한 그룹에 하차(alight) 역할 PLATFORM이 2개 이상이면 validate() 오류를 반환해야 한다."""
+    # _platform_node는 TrainConfig(mode 기본="both")이므로 둘 다 하차 역할
     p1 = _platform_node("P1", group="GRP")
     p2 = _platform_node("P2", group="GRP")
     g = StationGraph(nodes=[p1, p2], links=[])
     errs = g.validate()
-    assert any("승강장" in e and "GRP" in e for e in errs), f"예상 오류 없음: {errs}"
+    assert any("하차" in e and "GRP" in e for e in errs), f"예상 오류 없음: {errs}"
+
+
+def test_group_board_plus_alight_platform_no_error():
+    """한 그룹에 board 승강장 1개 + alight 승강장 1개이면 오류가 없어야 한다."""
+    from sim.model import TrainConfig
+    p_board = _platform_node("PB", group="GRP")
+    p_board.train = TrainConfig(first_arrival_sec=60, headway_sec=300, mode="board")
+    p_alight = _platform_node("PA", group="GRP")
+    p_alight.train = TrainConfig(first_arrival_sec=60, headway_sec=300, mode="alight")
+    g = StationGraph(nodes=[p_board, p_alight], links=[])
+    errs = g.validate()
+    group_errs = [e for e in errs if "하차" in e and "GRP" in e]
+    assert group_errs == [], f"오류가 없어야 함: {group_errs}"
 
 
 def test_group_mixed_congestion_enabled_raises_error():

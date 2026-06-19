@@ -39,6 +39,12 @@ class GenerationConfig:
 
 
 @dataclass
+class ElevatorConfig:
+    capacity: float = 10.0   # 1회 운송 인원
+    speed: int = 3            # 출발 주기(slot 수)
+
+
+@dataclass
 class TrainConfig:
     first_arrival_sec: float
     headway_sec: float
@@ -47,6 +53,7 @@ class TrainConfig:
     alight_kind: str = "constant"           # "constant" | "poisson" | "normal"
     alight_mean: float = 100.0              # 하차 인원 평균
     alight_std: float = 0.0                 # 하차 인원 표준편차(normal)
+    mode: str = "both"                      # "both" | "alight" | "board"
 
 
 @dataclass
@@ -63,6 +70,7 @@ class Node:
     group: str = ""
     generation: GenerationConfig | None = None
     train: TrainConfig | None = None
+    elevator: ElevatorConfig | None = None
 
 
 @dataclass
@@ -112,6 +120,8 @@ class StationGraph:
             nd["generation"] = GenerationConfig(**_known_kwargs(GenerationConfig, gen)) if gen else None
             tr = nd.get("train")
             nd["train"] = TrainConfig(**_known_kwargs(TrainConfig, tr)) if tr else None
+            el = nd.get("elevator")
+            nd["elevator"] = ElevatorConfig(**_known_kwargs(ElevatorConfig, el)) if el else None
             nodes.append(Node(**_known_kwargs(Node, nd)))
         links = [Link(**_known_kwargs(Link, dict(ld))) for ld in data["links"]]
         return cls(nodes=nodes, links=links)
@@ -177,6 +187,23 @@ class StationGraph:
             if n.type != NodeType.PLATFORM and n.train is not None:
                 errors.append(f"노드 {n.id}: 열차 설정은 승강장만 가능")
 
+            # ELEVATOR 노드 검증
+            if n.type == NodeType.ELEVATOR:
+                if n.elevator is None:
+                    errors.append(f"노드 {n.id}: 엘리베이터는 용량/속력 설정(elevator)이 필요")
+                else:
+                    if n.elevator.capacity <= 0:
+                        errors.append(f"노드 {n.id}: elevator capacity는 0보다 커야 함")
+                    if n.elevator.speed < 1:
+                        errors.append(f"노드 {n.id}: elevator speed는 1 이상이어야 함")
+                if n.train is not None:
+                    errors.append(f"노드 {n.id}: 엘리베이터 노드에는 열차 설정(train)이 불가")
+                if n.generation is not None:
+                    errors.append(f"노드 {n.id}: 엘리베이터 노드에는 발생 설정(generation)이 불가")
+            # 엘리베이터 아닌 노드에 elevator 설정 금지
+            if n.type != NodeType.ELEVATOR and n.elevator is not None:
+                errors.append(f"노드 {n.id}: 엘리베이터 설정은 엘리베이터 노드만 가능")
+
             # PLATFORM 노드 train 필드 상세 검증
             if n.type == NodeType.PLATFORM and n.train is not None:
                 train = n.train
@@ -189,6 +216,8 @@ class StationGraph:
                 # FIX 2: alight_kind 유효성 검사
                 if train.alight_kind not in ("constant", "poisson", "normal"):
                     errors.append(f"노드 {n.id}: 하차 분포는 constant/poisson/normal 중 하나")
+                if train.mode not in ("both", "alight", "board"):
+                    errors.append(f"노드 {n.id}: 열차 mode는 both/alight/board 중 하나")
 
             # FIX 2: generation.kind 유효성 검사
             if n.generation is not None:
@@ -215,11 +244,16 @@ class StationGraph:
                 group_nodes[n.group].append(n)
 
         for g, members in group_nodes.items():
-            # 한 그룹에 PLATFORM이 2개 이상이면 오류
-            platform_count = sum(1 for m in members if m.type == NodeType.PLATFORM)
-            if platform_count >= 2:
+            # 한 그룹에 하차 역할(mode in both/alight) PLATFORM이 2개 이상이면 오류
+            alight_platform_count = sum(
+                1 for m in members
+                if m.type == NodeType.PLATFORM
+                and m.train is not None
+                and getattr(m.train, "mode", "both") in ("both", "alight")
+            )
+            if alight_platform_count >= 2:
                 errors.append(
-                    f"그룹 '{g}': 한 그룹에 승강장이 2개 이상이면 열차 하차가 중복 계산됩니다"
+                    f"그룹 '{g}': 한 그룹에 하차(alight) 승강장이 2개 이상이면 하차가 중복됩니다"
                 )
             # 그룹 내 congestion_enabled 혼재 → 오류
             congestion_values = {m.congestion_enabled for m in members}
