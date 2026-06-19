@@ -24,6 +24,7 @@ export function useSimulation(opts: Options = {}) {
   const [error, setError] = useState<string | null>(null)
   const [speed, setSpeed] = useState(10) // steps/sec
   const runningRef = useRef(false)
+  const numStepsRef = useRef(0)
   const speedRef = useRef(speed)
   speedRef.current = speed
 
@@ -51,6 +52,7 @@ export function useSimulation(opts: Options = {}) {
       await ensureInit()
       const info = await client().load(JSON.stringify(project))
       setNumSteps(info.num_steps)
+      numStepsRef.current = info.num_steps
       const snap = await client().snapshot()
       setSnapshot(snap); setHistory([snap]); setStatus('ready')
       return true
@@ -64,13 +66,14 @@ export function useSimulation(opts: Options = {}) {
       const snap = await client().step(1)
       setSnapshot(snap)
       setHistory((h) => [...h, snap])
-      if (snap.t >= numSteps) { runningRef.current = false; setStatus('done'); break }
+      if (snap.t >= numStepsRef.current) { runningRef.current = false; setStatus('done'); break }
       const delayMs = 1000 / Math.max(1, speedRef.current)
       await new Promise((r) => setTimeout(r, delayMs))
     }
-  }, [client, numSteps])
+  }, [client])
 
   const play = useCallback(async () => {
+    if (runningRef.current) return
     if (status === 'idle' || status === 'error') { const ok = await prepare(); if (!ok) return }
     runningRef.current = true; setStatus('running'); void loop()
   }, [status, prepare, loop])
@@ -81,8 +84,8 @@ export function useSimulation(opts: Options = {}) {
     if (status === 'idle' || status === 'error') { const ok = await prepare(); if (!ok) return }
     const snap = await client().step(1)
     setSnapshot(snap); setHistory((h) => [...h, snap])
-    if (snap.t >= numSteps) setStatus('done'); else setStatus('paused')
-  }, [status, prepare, client, numSteps])
+    if (snap.t >= numStepsRef.current) setStatus('done'); else setStatus('paused')
+  }, [status, prepare, client])
 
   const reset = useCallback(async () => {
     runningRef.current = false
