@@ -8,15 +8,17 @@ export function Dashboard({ sim }: { sim: ReturnType<typeof useSimulation> }) {
 
   useEffect(() => {
     if (!ref.current) return
+    const node = ref.current
     const series = buildSeries(sim.history)
     const traces = series.map((s) => ({
       x: s.x, y: s.y, name: s.node, type: 'scatter' as const, mode: 'lines' as const,
     }))
-    Plotly.react(ref.current, traces, {
+    Plotly.react(node, traces, {
       margin: { t: 20, r: 10, b: 40, l: 50 },
       xaxis: { title: '시간(초)' }, yaxis: { title: '혼잡도(인원수)' },
       showlegend: true,
     }, { responsive: true, displaylogo: false })
+    return () => { Plotly.purge(node) }
   }, [sim.history])
 
   const snap = sim.snapshot
