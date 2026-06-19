@@ -3,8 +3,8 @@ import { SAMPLE_TEMPLATES, loadTemplate } from './templates'
 import { validateGraph } from './validation'
 
 describe('templates', () => {
-  it('has at least 8 templates', () => {
-    expect(SAMPLE_TEMPLATES.length).toBeGreaterThanOrEqual(8)
+  it('has at least 10 templates', () => {
+    expect(SAMPLE_TEMPLATES.length).toBeGreaterThanOrEqual(10)
   })
 
   it('all templates pass validateGraph (must be [])', () => {
@@ -54,15 +54,63 @@ describe('templates', () => {
     expect(t).toBeDefined()
     expect(t!.project.graph.nodes.some((n) => n.generation?.kind === 'normal_pulse')).toBe(true)
   })
+
+  it('at least one template uses a generation profile (time-varying)', () => {
+    const hasProfile = SAMPLE_TEMPLATES.some((t) =>
+      t.project.graph.nodes.some((n) => n.generation?.profile != null && n.generation.profile.length > 0)
+    )
+    expect(hasProfile).toBe(true)
+  })
+
+  it('initial_congestion template has initial_population >= 150 on a platform', () => {
+    const t = SAMPLE_TEMPLATES.find((t) => t.name === '열차 연착(초기 혼잡) 역')
+    expect(t).toBeDefined()
+    const hasPrecongested = t!.project.graph.nodes.some(
+      (n) => n.type === 'platform' && (n.initial_population ?? 0) >= 150
+    )
+    expect(hasPrecongested).toBe(true)
+  })
+
+  it('transfer station has explicit transfer-passage nodes between lines', () => {
+    const t = SAMPLE_TEMPLATES.find((t) => t.name.startsWith('환승역'))
+    expect(t).toBeDefined()
+    // Should have passage nodes connecting the two platform lines (TR12/TR21)
+    const passageNodes = t!.project.graph.nodes.filter((n) => n.type === 'passage')
+    expect(passageNodes.length).toBeGreaterThanOrEqual(2)
+    // There should be a link from an alight platform to a passage (transfer corridor)
+    const alightIds = t!.project.graph.nodes
+      .filter((n) => n.type === 'platform' && n.train?.mode === 'alight')
+      .map((n) => n.id)
+    const passageIds = new Set(passageNodes.map((n) => n.id))
+    const hasTransferLink = t!.project.graph.links.some(
+      (l) => alightIds.includes(l.source) && passageIds.has(l.target)
+    )
+    expect(hasTransferLink, 'Expected alight platform → transfer passage link').toBe(true)
+  })
 })
 
 describe('loadTemplate', () => {
-  it('returns the project for a known template name', () => {
+  it('returns a deep clone — mutating returned project does NOT affect SAMPLE_TEMPLATES', () => {
     const name = SAMPLE_TEMPLATES[0].name
-    expect(loadTemplate(name)).toBe(SAMPLE_TEMPLATES[0].project)
+    const original = SAMPLE_TEMPLATES[0].project
+    const clone = loadTemplate(name)
+    expect(clone).toBeDefined()
+    // Mutate the clone
+    clone!.graph.nodes[0].name = '__MUTATED__'
+    // Original must be unchanged
+    expect(original.graph.nodes[0].name).not.toBe('__MUTATED__')
   })
 
   it('returns undefined for an unknown name', () => {
     expect(loadTemplate('___nope___')).toBeUndefined()
+  })
+
+  it('returned project passes validateGraph', () => {
+    for (const t of SAMPLE_TEMPLATES) {
+      const project = loadTemplate(t.name)
+      expect(project).toBeDefined()
+      const errors = validateGraph(project!.graph)
+      expect(errors, `loadTemplate("${t.name}") validation errors:\n  ${errors.join('\n  ')}`).toEqual([])
+    }
   })
 })

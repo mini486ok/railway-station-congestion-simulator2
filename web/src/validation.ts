@@ -46,6 +46,11 @@ export function validateGraph(graph: StationGraphJSON): string[] {
     const hasOutflow = outCount[n.id] > 0 || exitW > 0
     if (hasOutflow) {
       if (Math.abs(totalOut - 1) > TOL) errors.push(`노드 ${n.id}: 출력 가중치 합(+exit)이 1이 아님 (${totalOut.toFixed(4)})`)
+      // Sink-trap guard (Python validator 미러): 비-엘리베이터 노드가 출력/이탈 경로를
+      // 갖고 있으면서 base_stay_prob>=1 이면 아무도 이동하지 않는 함정이 된다.
+      if (n.type !== 'elevator' && n.base_stay_prob >= 1) {
+        errors.push(`노드 ${n.id}: 출력/이탈 경로가 있으나 이동확률이 0입니다(base_stay_prob=1). 에스컬레이터는 0.0으로, 승강장 외 노드는 1 미만으로 설정하세요.`)
+      }
     } else if (Math.abs(n.base_stay_prob - 1) > TOL) {
       errors.push(`노드 ${n.id}: 이동인원이 갈 곳이 없음(출력/exit 없음, 체류확률<1)`)
     }
