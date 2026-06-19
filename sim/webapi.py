@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 
-from sim.io import load_config, history_to_csv, gnn_bundle
+from sim.io import load_config, history_to_csv, gnn_bundle, history_by_group
 from sim.engine import Engine
 
 _engine: Engine | None = None
@@ -26,8 +26,18 @@ def load(config_text: str) -> str:
     if errors:
         raise ValueError("; ".join(errors))
     _engine = Engine(graph, config)
+    # 유효 그룹 레이블: group 있으면 그대로, 없으면 node.id
+    node_map = {nd.id: nd for nd in graph.nodes}
+    effective_groups = [
+        node_map[nid].group if node_map[nid].group else nid
+        for nid in _engine.node_ids
+    ]
     return json.dumps(
-        {"node_ids": _engine.node_ids, "num_steps": _engine.num_steps},
+        {
+            "node_ids": _engine.node_ids,
+            "num_steps": _engine.num_steps,
+            "groups": effective_groups,
+        },
         ensure_ascii=False,
     )
 
@@ -67,6 +77,19 @@ def export_csv(layout: str = "wide") -> str:
 def export_gnn() -> str:
     assert _engine is not None
     return json.dumps(gnn_bundle(_engine.graph), ensure_ascii=False)
+
+
+def export_group_csv() -> str:
+    """그룹별 혼잡도(인원 합) 시계열 CSV 를 반환한다."""
+    assert _engine is not None
+    node_map = {nd.id: nd for nd in _engine.graph.nodes}
+    effective_groups = [
+        node_map[nid].group if node_map[nid].group else nid
+        for nid in _engine.node_ids
+    ]
+    return history_by_group(
+        _engine.history, _engine.node_ids, effective_groups, _engine.config.dt_seconds
+    )
 
 
 def history_json() -> str:

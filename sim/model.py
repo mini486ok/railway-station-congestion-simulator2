@@ -60,6 +60,7 @@ class Node:
     weidmann: WeidmannParams = field(default_factory=WeidmannParams)
     initial_population: float = 0.0
     exit_weight: float = 0.0
+    group: str = ""
     generation: GenerationConfig | None = None
     train: TrainConfig | None = None
 

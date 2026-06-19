@@ -25,6 +25,22 @@ class Engine:
         self.rho_max = np.array([nd.weidmann.rho_max for nd in graph.nodes], dtype=float)
         self.gamma = np.array([nd.weidmann.gamma for nd in graph.nodes], dtype=float)
 
+        # 그룹 매핑 구축 (정적, rng 불필요)
+        # 그룹 없는 노드는 "__solo_{id}" 로 자기 자신만의 singleton 그룹을 가짐
+        group_keys = [
+            nd.group if nd.group else f"__solo_{nd.id}"
+            for nd in graph.nodes
+        ]
+        unique_groups: list[str] = []
+        seen: dict[str, int] = {}
+        for key in group_keys:
+            if key not in seen:
+                seen[key] = len(unique_groups)
+                unique_groups.append(key)
+        self.group_index = np.array([seen[k] for k in group_keys], dtype=np.intp)
+        self.group_area = np.zeros(len(unique_groups), dtype=float)
+        np.add.at(self.group_area, self.group_index, self.area)
+
         # 출력 링크: source_idx -> [(target_idx, weight, travel_time), ...]
         self.out_links: list[list[tuple[int, float, int]]] = [[] for _ in range(n)]
         for l in graph.links:
@@ -62,7 +78,12 @@ class Engine:
         self.history[0] = self.N
 
     def _move_prob(self) -> np.ndarray:
-        return move_probability_vec(self.N, self.area, self.base_move,
+        # 그룹 집계 밀도 계산
+        group_pop = np.zeros(len(self.group_area))
+        np.add.at(group_pop, self.group_index, self.N)
+        eff_N = group_pop[self.group_index]
+        eff_area = self.group_area[self.group_index]
+        return move_probability_vec(eff_N, eff_area, self.base_move,
                                     self.v_free, self.rho_max, self.gamma, self.enabled)
 
     def step(self) -> None:

@@ -28,5 +28,5 @@ def test_distance_and_travel_time():
 def test_node_features():
     b = gnn_bundle(_g())
     lines = b["node_features"].strip().splitlines()
-    assert lines[0] == "id,name,type,area"
-    assert lines[1] == "A,입구,entrance,50.0"
+    assert lines[0] == "id,name,type,area,group"
+    assert lines[1] == "A,입구,entrance,50.0,"

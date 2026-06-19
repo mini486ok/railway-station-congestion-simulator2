@@ -45,9 +45,9 @@ def gnn_bundle(graph: StationGraph) -> dict[str, str]:
             rows.append(nid + "," + ",".join(str(v) for v in mat[i]))
         return "\n".join(rows) + "\n"
 
-    feat_rows = ["id,name,type,area"]
+    feat_rows = ["id,name,type,area,group"]
     for node in graph.nodes:
-        feat_rows.append(f"{node.id},{node.name},{node.type.value},{float(node.area)}")
+        feat_rows.append(f"{node.id},{node.name},{node.type.value},{float(node.area)},{node.group}")
 
     return {
         "adjacency": matrix_csv(adj),
@@ -55,6 +55,37 @@ def gnn_bundle(graph: StationGraph) -> dict[str, str]:
         "travel_time": matrix_csv(tt),
         "node_features": "\n".join(feat_rows) + "\n",
     }
+
+
+def history_by_group(history: np.ndarray, node_ids: list[str],
+                     groups: list[str], dt_seconds: float) -> str:
+    """그룹별 혼잡도(인원 합) 시계열 CSV.
+
+    groups: list[str] — 노드별 group, ""는 자기 자신 id로 취급.
+    반환: wide CSV ``step,time_sec,<group1>,<group2>,...``
+    그룹 컬럼 순서: 첫 등장 순서.
+    """
+    # 유효 그룹 레이블 결정 및 첫-등장 순서 유지
+    eff_groups = [g if g else nid for g, nid in zip(groups, node_ids)]
+    unique_groups: list[str] = []
+    seen: dict[str, int] = {}
+    for key in eff_groups:
+        if key not in seen:
+            seen[key] = len(unique_groups)
+            unique_groups.append(key)
+
+    num_steps = history.shape[0]
+    num_unique = len(unique_groups)
+
+    rows = [",".join(["step", "time_sec"] + unique_groups)]
+    for t in range(num_steps):
+        group_sum = np.zeros(num_unique, dtype=float)
+        for j, key in enumerate(eff_groups):
+            group_sum[seen[key]] += history[t, j]
+        vals = [str(t), str(float(t * dt_seconds))]
+        vals += [str(float(v)) for v in group_sum]
+        rows.append(",".join(vals))
+    return "\n".join(rows) + "\n"
 
 
 def save_config(graph: StationGraph, config: SimConfig) -> str:
