@@ -52,6 +52,10 @@ class Engine:
         self.total_exited = 0.0
         self.total_generated = 0.0
 
+        self.num_steps = int(round(self.config.duration_seconds / self.config.dt_seconds))
+        self.history = np.zeros((self.num_steps + 1, len(self.node_ids)))
+        self.history[0] = self.N
+
     def _move_prob(self) -> np.ndarray:
         return move_probability_vec(self.N, self.area, self.base_move,
                                     self.v_free, self.rho_max, self.gamma, self.enabled)
@@ -104,3 +108,21 @@ class Engine:
 
         self.N = newN
         self.t += 1
+
+    def run(self, on_progress=None) -> np.ndarray:
+        for _ in range(self.num_steps):
+            self.step()
+            self.history[self.t] = self.N
+            if on_progress is not None:
+                on_progress(self.t, self.num_steps)
+        return self.history
+
+    def snapshot(self) -> dict:
+        return {
+            "t": int(self.t),
+            "time_sec": float(self.t * self.config.dt_seconds),
+            "N": [float(x) for x in self.N],
+            "node_ids": list(self.node_ids),
+            "total_generated": float(self.total_generated),
+            "total_exited": float(self.total_exited),
+        }
