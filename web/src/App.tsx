@@ -18,12 +18,38 @@ import type { NamedTemplate } from './userTemplates'
 import { listHidden, hideBuiltin, restoreHidden } from './hiddenTemplates'
 import { UsageGuide } from './components/UsageGuide'
 import { OutputGuide } from './components/OutputGuide'
+import type { StationNode, StationLink } from './types'
+
+type ClipboardData =
+  | { kind: 'node'; data: StationNode }
+  | { kind: 'link'; data: Pick<StationLink, 'distance' | 'weight' | 'travel_time'> }
+
+function isEditableTarget(el: EventTarget | null): boolean {
+  if (!el || !(el instanceof HTMLElement)) return false
+  const tag = el.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true
+  if ((el as HTMLElement).isContentEditable) return true
+  return false
+}
 
 export default function App() {
   const [selNode, setSelNode] = useState<string | null>(null)
   const [selLink, setSelLink] = useState<number | null>(null)
+  const [collapsed, setCollapsed] = useState({ left: false, center: false, right: false })
+  const clipboardRef = useRef<ClipboardData | null>(null)
+
   const loadProject = useStore((s) => s.loadProject)
   const toProject = useStore((s) => s.toProject)
+  const undo = useStore((s) => s.undo)
+  const redo = useStore((s) => s.redo)
+  const canUndo = useStore((s) => s.canUndo)
+  const canRedo = useStore((s) => s.canRedo)
+  const nodes = useStore((s) => s.nodes)
+  const links = useStore((s) => s.links)
+  const positions = useStore((s) => s.positions)
+  const addNodeFromData = useStore((s) => s.addNodeFromData)
+  const updateLink = useStore((s) => s.updateLink)
+
   const [userTemplates, setUserTemplates] = useState<NamedTemplate[]>(listUserTemplates)
   const [selectedValue, setSelectedValue] = useState<string>('')
   const [view, setView] = useState<'sim' | 'usage' | 'output'>('sim')
@@ -42,9 +68,88 @@ export default function App() {
     if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current)
   }, [])
 
+  // Keyboard shortcuts: Ctrl+Z, Ctrl+Y, Ctrl+Shift+Z, Ctrl+C, Ctrl+V
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const ctrl = e.ctrlKey || e.metaKey
+      if (!ctrl) return
+
+      // Undo / Redo shortcuts — skip when typing in form elements
+      if (!isEditableTarget(e.target)) {
+        if (e.key === 'z' && !e.shiftKey) {
+          e.preventDefault()
+          undo()
+          setSelNode(null)
+          setSelLink(null)
+          return
+        }
+        if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) {
+          e.preventDefault()
+          redo()
+          setSelNode(null)
+          setSelLink(null)
+          return
+        }
+      }
+
+      // Copy / Paste — skip when typing in form elements
+      if (!isEditableTarget(e.target)) {
+        if (e.key === 'c') {
+          if (selNode) {
+            const node = nodes.find((n) => n.id === selNode)
+            if (node) {
+              clipboardRef.current = { kind: 'node', data: JSON.parse(JSON.stringify(node)) }
+            }
+          } else if (selLink !== null) {
+            const link = links[selLink]
+            if (link) {
+              clipboardRef.current = {
+                kind: 'link',
+                data: { distance: link.distance, weight: link.weight, travel_time: link.travel_time },
+              }
+            }
+          }
+          return
+        }
+
+        if (e.key === 'v') {
+          const cb = clipboardRef.current
+          if (!cb) return
+          e.preventDefault()
+          if (cb.kind === 'node') {
+            const srcPos = positions[cb.data.id]
+            const pos = srcPos
+              ? { x: srcPos.x + 40, y: srcPos.y + 40 }
+              : { x: 140, y: 140 }
+            const newId = addNodeFromData(cb.data, pos)
+            setSelNode(newId)
+            setSelLink(null)
+          } else if (cb.kind === 'link' && selLink !== null) {
+            updateLink(selLink, cb.data)
+          }
+          return
+        }
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [undo, redo, selNode, selLink, nodes, links, positions, addNodeFromData, updateLink])
+
+  const toggleCollapse = (col: 'left' | 'center' | 'right') => {
+    setCollapsed((prev) => ({ ...prev, [col]: !prev[col] }))
+  }
+
   const isBuiltinSelected = selectedValue.startsWith('builtin:')
   const selectedBuiltinName = isBuiltinSelected ? selectedValue.slice('builtin:'.length) : ''
   const visibleBuiltins = SAMPLE_TEMPLATES.filter((t) => !hidden.includes(t.name))
+
+  // Build grid-template-columns based on collapsed state
+  const colWidths = [
+    collapsed.left ? '28px' : '1fr',
+    collapsed.center ? '28px' : '1fr',
+    collapsed.right ? '28px' : '360px',
+  ]
+  const gridTemplateColumns = colWidths.join(' ')
 
   return (
     <ReactFlowProvider>
@@ -53,6 +158,24 @@ export default function App() {
           <h1>철도역사 혼잡도 합성데이터 시뮬레이터</h1>
           {view === 'sim' && (
             <div className="row" style={{ gap: '6px', alignItems: 'center' }}>
+              {/* Undo / Redo buttons */}
+              <button
+                title="실행취소 (Ctrl+Z)"
+                disabled={!canUndo()}
+                onClick={() => { undo(); setSelNode(null); setSelLink(null) }}
+                style={{ fontSize: '1.1em', padding: '4px 8px' }}
+              >
+                ↶
+              </button>
+              <button
+                title="다시실행 (Ctrl+Y / Ctrl+Shift+Z)"
+                disabled={!canRedo()}
+                onClick={() => { redo(); setSelNode(null); setSelLink(null) }}
+                style={{ fontSize: '1.1em', padding: '4px 8px' }}
+              >
+                ↷
+              </button>
+
               <select
                 value={selectedValue}
                 title={selectedValue}
@@ -188,24 +311,69 @@ export default function App() {
         </header>
         <div role="tabpanel" aria-labelledby={`tab-${view}`}>
         {view === 'sim' && (
-          <div className="layout">
-            <section className="left">
-              <NodePalette onAdded={(id) => { setSelNode(id); setSelLink(null) }} />
-              <GraphEditor
-                selectedNodeId={selNode} selectedLinkIndex={selLink}
-                onSelectNode={setSelNode} onSelectLink={setSelLink}
-              />
+          <div className="layout" style={{ gridTemplateColumns }}>
+            {/* LEFT column */}
+            <section className={`left panel-col${collapsed.left ? ' col-collapsed' : ''}`}>
+              {collapsed.left ? (
+                <div className="col-strip">
+                  <button className="col-toggle-btn" title="그래프 편집기 열기" onClick={() => toggleCollapse('left')}>▶</button>
+                  <span className="col-rotated-label">그래프 편집기</span>
+                </div>
+              ) : (
+                <>
+                  <div className="col-header">
+                    <span className="col-title">그래프 편집기</span>
+                    <button className="col-toggle-btn" title="그래프 편집기 접기" onClick={() => toggleCollapse('left')}>◀</button>
+                  </div>
+                  <NodePalette onAdded={(id) => { setSelNode(id); setSelLink(null) }} />
+                  <GraphEditor
+                    selectedNodeId={selNode} selectedLinkIndex={selLink}
+                    onSelectNode={setSelNode} onSelectLink={setSelLink}
+                  />
+                  <div className="shortcut-hint">Ctrl+C/V 복사·붙여넣기, Ctrl+Z/Y 실행취소·재실행</div>
+                </>
+              )}
             </section>
-            <section className="center">
-              <SimControls sim={sim} />
-              <Dashboard sim={sim} />
+
+            {/* CENTER column */}
+            <section className={`center panel-col${collapsed.center ? ' col-collapsed' : ''}`}>
+              {collapsed.center ? (
+                <div className="col-strip">
+                  <button className="col-toggle-btn" title="시뮬레이션 열기" onClick={() => toggleCollapse('center')}>▶</button>
+                  <span className="col-rotated-label">시뮬레이션</span>
+                </div>
+              ) : (
+                <>
+                  <div className="col-header">
+                    <span className="col-title">시뮬레이션</span>
+                    <button className="col-toggle-btn" title="시뮬레이션 접기" onClick={() => toggleCollapse('center')}>◀</button>
+                  </div>
+                  <SimControls sim={sim} />
+                  <Dashboard sim={sim} />
+                </>
+              )}
             </section>
-            <section className="right">
-              <ValidationBanner />
-              {selNode && <NodeInspector nodeId={selNode} />}
-              {selLink !== null && <LinkInspector index={selLink} />}
-              <ExportPanel sim={sim} />
-              <BatchPanel sim={sim} />
+
+            {/* RIGHT column */}
+            <section className={`right panel-col${collapsed.right ? ' col-collapsed' : ''}`}>
+              {collapsed.right ? (
+                <div className="col-strip">
+                  <button className="col-toggle-btn" title="속성 패널 열기" onClick={() => toggleCollapse('right')}>◀</button>
+                  <span className="col-rotated-label">속성 · 내보내기</span>
+                </div>
+              ) : (
+                <>
+                  <div className="col-header">
+                    <span className="col-title">속성 · 내보내기</span>
+                    <button className="col-toggle-btn" title="속성 패널 접기" onClick={() => toggleCollapse('right')}>▶</button>
+                  </div>
+                  <ValidationBanner />
+                  {selNode && <NodeInspector nodeId={selNode} />}
+                  {selLink !== null && <LinkInspector index={selLink} />}
+                  <ExportPanel sim={sim} />
+                  <BatchPanel sim={sim} />
+                </>
+              )}
             </section>
           </div>
         )}
