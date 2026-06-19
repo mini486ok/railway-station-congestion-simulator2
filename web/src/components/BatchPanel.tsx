@@ -45,6 +45,8 @@ export function BatchPanel({ sim }: { sim: ReturnType<typeof useSimulation> }) {
       <button onClick={() => void go()} disabled={busy}>
         {busy ? `실행 중 ${done}/${runs}` : 'N회 실행 → ZIP 다운로드'}
       </button>
+      {/* FIX M: progress bar while busy */}
+      {busy && <progress value={done} max={runs} />}
     </div>
   )
 }

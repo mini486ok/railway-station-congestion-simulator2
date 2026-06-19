@@ -36,7 +36,7 @@ export function GraphEditor({ selectedNodeId, selectedLinkIndex, onSelectNode, o
   }, [addLink])
 
   return (
-    <div className="graph-editor" style={{ height: '100%', width: '100%' }}>
+    <div className="graph-editor" style={{ height: '100%', width: '100%', position: 'relative' }}>
       <ReactFlow
         nodes={rfNodes}
         edges={rfEdges}
@@ -53,6 +53,18 @@ export function GraphEditor({ selectedNodeId, selectedLinkIndex, onSelectNode, o
         <Background />
         <Controls />
       </ReactFlow>
+      {/* FIX H: empty-state hint overlay when no nodes exist */}
+      {nodes.length === 0 && (
+        <div style={{
+          position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
+          justifyContent: 'center', pointerEvents: 'none', textAlign: 'center',
+          color: '#888', fontSize: '0.88em', lineHeight: 1.7, padding: 24,
+        }}>
+          ① 좌측 '노드 추가'에서 노드를 만들고<br />
+          ② 노드 가장자리를 드래그해 연결하세요.<br />
+          또는 상단에서 예제 템플릿을 불러오세요.
+        </div>
+      )}
     </div>
   )
 }

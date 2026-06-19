@@ -31,3 +31,9 @@ progress { width: 200px; }
 .guide h2 { margin-top: 0; } .guide h3 { margin-top: 20px; }
 .guide pre { background: #0f1f2e; color: #d6e6f5; padding: 10px 12px; border-radius: 6px; overflow:auto; font-size: 12px; }
 .guide-view { flex: 1; min-height: 0; overflow: auto; }
+/* FIX N: toggle button active state */
+.toggle-btn { padding: 2px 10px; }
+.toggle-btn.active { background: #2a6; color: #fff; border-color: #2a6; font-weight: bold; }
+/* FIX O: responsive layout */
+@media (max-width: 1200px){ .layout{ grid-template-columns: 1fr 1fr; } }
+@media (max-width: 820px){ .layout{ grid-template-columns: 1fr; } }

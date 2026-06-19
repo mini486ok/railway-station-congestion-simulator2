@@ -92,20 +92,27 @@ export default function App() {
               )}
             </div>
           )}
-          <div className="tabs">
+          {/* FIX K: tab ARIA */}
+          <div className="tabs" role="tablist">
             <button
+              role="tab"
+              aria-selected={view === 'sim'}
               className={view === 'sim' ? 'active' : ''}
               onClick={() => setView('sim')}
             >
               시뮬레이터
             </button>
             <button
+              role="tab"
+              aria-selected={view === 'usage'}
               className={view === 'usage' ? 'active' : ''}
               onClick={() => setView('usage')}
             >
               사용법
             </button>
             <button
+              role="tab"
+              aria-selected={view === 'output'}
               className={view === 'output' ? 'active' : ''}
               onClick={() => setView('output')}
             >
@@ -113,6 +120,7 @@ export default function App() {
             </button>
           </div>
         </header>
+        <div role="tabpanel">
         {view === 'sim' && (
           <div className="layout">
             <section className="left">
@@ -145,6 +153,7 @@ export default function App() {
             <OutputGuide />
           </div>
         )}
+        </div>
       </div>
     </ReactFlowProvider>
   )

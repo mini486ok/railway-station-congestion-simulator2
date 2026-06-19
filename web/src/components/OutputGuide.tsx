@@ -29,6 +29,7 @@ export function OutputGuide() {
       </p>
       <ul>
         <li>열 이름 = 그룹 이름 (그룹이 없는 노드는 노드 id 그대로 사용)</li>
+        <li>열 값은 해당 그룹에 속한 노드들의 <strong>인원수(명) 합계</strong>입니다 (밀도가 아닌 인원수).</li>
         <li>형식은 congestion_timeseries.csv와 동일 (step, time_sec + 그룹 열)</li>
         <li>GNN 학습에서 실제 장소 단위 레이블로 활용</li>
       </ul>
@@ -98,22 +99,19 @@ X,출구,entrance,30.0,`}</pre>
         역 그래프 구조와 시뮬레이션 설정을 JSON 형식으로 저장합니다.
         다른 브라우저 세션이나 팀원과 공유할 때 사용합니다.
       </p>
+      <p>
+        <strong>참고:</strong> 출구 노드는 <code>type: "entrance"</code>에 <code>exit_weight: 1.0</code>을 설정하여 표현합니다.
+      </p>
       <pre>{`{
   "graph": {
     "nodes": [
-      { "id": "A", "name": "출입구", "type": "entrance",
-        "area": 30, "x": 100, "y": 200, "group": "" }
+      {"id":"A","name":"입구","type":"entrance","area":50,"base_stay_prob":0.2,"exit_weight":0,"group":"","generation":{"kind":"poisson","rate":1.5},"train":null}
     ],
     "links": [
-      { "source": "A", "target": "G", "weight": 1.0 }
+      {"source":"A","target":"G","distance":30,"weight":1.0,"travel_time":0}
     ]
   },
-  "config": {
-    "totalTime": 3600,
-    "dt": 5,
-    "seed": 42,
-    "stochastic": true
-  }
+  "config": {"dt_seconds":5,"duration_seconds":1800,"default_walk_speed":1.34,"stochastic":false,"seed":0,"observation_noise_std":0,"missing_prob":0}
 }`}</pre>
 
       <h3>5. 배치 ZIP — 대량 학습데이터</h3>
