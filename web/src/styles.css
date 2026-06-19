@@ -18,3 +18,9 @@ input, select { padding: 4px; }
 .validation.err { background: #fdeaea; color: #911; white-space: pre-wrap; }
 .metrics { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; margin-bottom: 8px; }
 progress { width: 200px; }
+.infotip { position: relative; display: inline-block; margin-left: 4px; }
+.infotip-btn { all: unset; cursor: pointer; color: #2a6; font-size: 12px; line-height: 1; padding: 0 2px; }
+.infotip-btn:hover { color: #084; }
+.infotip-pop { position: absolute; left: 0; top: 18px; z-index: 50; width: 220px;
+  background: #1a2b3c; color: #fff; padding: 8px 10px; border-radius: 6px;
+  font-size: 12px; line-height: 1.4; box-shadow: 0 4px 12px rgba(0,0,0,.25); font-weight: 400; }

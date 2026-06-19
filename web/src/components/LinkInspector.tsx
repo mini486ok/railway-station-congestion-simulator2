@@ -1,4 +1,6 @@
 import { useStore } from '../store'
+import { InfoTip } from './InfoTip'
+import { PARAM_HELP } from '../paramHelp'
 
 export function LinkInspector({ index }: { index: number }) {
   const link = useStore((s) => s.links[index])
@@ -10,17 +12,17 @@ export function LinkInspector({ index }: { index: number }) {
     <div className="inspector">
       <h3>링크: {link.source} → {link.target}</h3>
       <label className="field">
-        <span>거리(m)</span>
+        <span>거리(m)<InfoTip text={PARAM_HELP.distance} /></span>
         <input type="number" value={link.distance}
           onChange={(e) => updateLink(index, { distance: parseFloat(e.target.value) })} />
       </label>
       <label className="field">
-        <span>가중치</span>
+        <span>가중치<InfoTip text={PARAM_HELP.weight} /></span>
         <input type="number" value={link.weight}
           onChange={(e) => updateLink(index, { weight: parseFloat(e.target.value) })} />
       </label>
       <label className="field">
-        <span>소요시간(스텝, 0=자동)</span>
+        <span>소요시간(스텝, 0=자동)<InfoTip text={PARAM_HELP.travel_time} /></span>
         <input type="number" value={link.travel_time ?? 0}
           onChange={(e) => updateLink(index, { travel_time: parseInt(e.target.value, 10) })} />
       </label>

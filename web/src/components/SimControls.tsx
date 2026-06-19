@@ -1,5 +1,7 @@
 import { useStore } from '../store'
 import type { useSimulation } from '../useSimulation'
+import { InfoTip } from './InfoTip'
+import { PARAM_HELP } from '../paramHelp'
 
 export function SimControls({ sim }: { sim: ReturnType<typeof useSimulation> }) {
   const config = useStore((s) => s.config)
@@ -7,25 +9,25 @@ export function SimControls({ sim }: { sim: ReturnType<typeof useSimulation> }) 
   return (
     <div className="controls">
       <div className="row">
-        <label>총 시간(초)
+        <label>총 시간(초)<InfoTip text={PARAM_HELP.duration} />
           <input type="number" value={config.duration_seconds}
             onChange={(e) => setConfig({ duration_seconds: parseFloat(e.target.value) })} />
         </label>
-        <label>Δt(초)
+        <label>Δt(초)<InfoTip text={PARAM_HELP.dt} />
           <input type="number" value={config.dt_seconds}
             onChange={(e) => setConfig({ dt_seconds: parseFloat(e.target.value) })} />
         </label>
-        <label>시드
+        <label>시드<InfoTip text={PARAM_HELP.seed} />
           <input type="number" value={config.seed}
             onChange={(e) => setConfig({ seed: parseInt(e.target.value, 10) })} />
         </label>
-        <label>확률모드
+        <label>확률모드<InfoTip text={PARAM_HELP.stochastic} />
           <input type="checkbox" checked={config.stochastic}
             onChange={(e) => setConfig({ stochastic: e.target.checked })} />
         </label>
       </div>
       <div className="row">
-        <label>배속 {sim.speed} step/s
+        <label>배속 {sim.speed} step/s<InfoTip text={PARAM_HELP.speed} />
           <input type="range" min={1} max={200} value={sim.speed}
             onChange={(e) => sim.setSpeed(parseInt(e.target.value, 10))} />
         </label>
