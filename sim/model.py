@@ -109,6 +109,17 @@ class StationGraph:
         links = [Link(**dict(ld)) for ld in data["links"]]
         return cls(nodes=nodes, links=links)
 
+    def resolve_travel_times(self, config: SimConfig) -> None:
+        speed_by_id = {n.id: n.weidmann.v_free for n in self.nodes}
+        for l in self.links:
+            if l.travel_time and l.travel_time > 0:
+                continue
+            v = speed_by_id.get(l.source, config.default_walk_speed)
+            if v <= 0:
+                v = config.default_walk_speed
+            steps = round(l.distance / (v * config.dt_seconds))
+            l.travel_time = max(1, int(steps))
+
     def validate(self, tol: float = 1e-6) -> list[str]:
         errors: list[str] = []
         ids = {n.id for n in self.nodes}
