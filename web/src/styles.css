@@ -1,0 +1,20 @@
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, sans-serif; color: #1a1a1a; }
+.app { display: flex; flex-direction: column; height: 100vh; }
+header { display: flex; gap: 16px; align-items: center; padding: 8px 16px; background: #0f2a4a; color: #fff; }
+header h1 { font-size: 18px; margin: 0; }
+.layout { display: grid; grid-template-columns: 1fr 1fr 360px; flex: 1; min-height: 0; }
+.left, .center, .right { padding: 8px; overflow: auto; border-right: 1px solid #ddd; }
+.left { display: flex; flex-direction: column; }
+.graph-editor { flex: 1; border: 1px solid #ddd; border-radius: 6px; }
+.palette-buttons, .row { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+button { padding: 6px 10px; border: 1px solid #2a5; background: #eafaef; border-radius: 4px; cursor: pointer; }
+button.danger { border-color: #c33; background: #fdeaea; }
+.field, label { display: flex; flex-direction: column; font-size: 12px; gap: 2px; margin: 4px 0; }
+input, select { padding: 4px; }
+.inspector, .export-panel, .batch-panel { border: 1px solid #ddd; border-radius: 6px; padding: 8px; margin: 8px 0; }
+.validation { padding: 8px; border-radius: 6px; margin: 8px 0; font-size: 13px; }
+.validation.ok { background: #eafaef; color: #161; }
+.validation.err { background: #fdeaea; color: #911; white-space: pre-wrap; }
+.metrics { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; margin-bottom: 8px; }
+progress { width: 200px; }
