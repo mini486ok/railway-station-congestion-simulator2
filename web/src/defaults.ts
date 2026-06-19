@@ -35,12 +35,17 @@ export function makeNode(type: NodeType, id: string): StationNode {
     id, name: id, type, area: 50.0, base_stay_prob: 0.3,
     congestion_enabled: d.congestion, weidmann: defaultWeidmann(d.v_free),
     initial_population: 0.0, exit_weight: 0.0, group: '', generation: null, train: null,
+    elevator: null,
   }
   if (type === 'entrance') node.generation = { kind: 'poisson', rate: 1.0 }
+  if (type === 'elevator') {
+    node.elevator = { capacity: 10, speed: 3 }
+  }
   if (type === 'platform') {
     node.train = {
       first_arrival_sec: 60, headway_sec: 300, jitter_sigma_sec: 0,
       capacity: 200, alight_kind: 'constant', alight_mean: 100, alight_std: 0,
+      mode: 'both',
     }
   }
   return node

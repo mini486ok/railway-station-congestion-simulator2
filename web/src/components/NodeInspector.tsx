@@ -1,6 +1,6 @@
 import { useStore } from '../store'
 import { NODE_TYPE_LABELS, defaultWeidmann } from '../defaults'
-import type { NodeType, GenerationConfig, TrainConfig } from '../types'
+import type { NodeType, GenerationConfig, TrainConfig, ElevatorConfig } from '../types'
 import { InfoTip } from './InfoTip'
 import { PARAM_HELP } from '../paramHelp'
 
@@ -32,7 +32,9 @@ export function NodeInspector({ nodeId }: { nodeId: string }) {
   const train: TrainConfig = node.train ?? {
     first_arrival_sec: 60, headway_sec: 300, jitter_sigma_sec: 0,
     capacity: 200, alight_kind: 'constant', alight_mean: 100, alight_std: 0,
+    mode: 'both',
   }
+  const elev: ElevatorConfig = node.elevator ?? { capacity: 10, speed: 3 }
   const w = node.weidmann ?? defaultWeidmann()
 
   return (
@@ -52,10 +54,12 @@ export function NodeInspector({ nodeId }: { nodeId: string }) {
           value={node.type}
           onChange={(e) => {
             const t = e.target.value as NodeType
+            const toElev = t === 'elevator'
             updateNode(node.id, {
               type: t,
-              generation: t === 'entrance' || t === 'platform' ? node.generation : null,
+              generation: (!toElev && (t === 'entrance' || t === 'platform')) ? node.generation : null,
               train: t === 'platform' ? train : null,
+              elevator: toElev ? { capacity: 10, speed: 3 } : null,
             })
           }}
         >
@@ -89,7 +93,15 @@ export function NodeInspector({ nodeId }: { nodeId: string }) {
         {numField('γ', w.gamma, (v) => updateNode(node.id, { weidmann: { ...w, gamma: v } }), 'gamma')}
       </fieldset>
 
-      {isSource && (
+      {node.type === 'elevator' && (
+        <fieldset>
+          <legend>엘리베이터</legend>
+          {numField('용량(인)', elev.capacity, (v) => updateNode(node.id, { elevator: { ...elev, capacity: v } }), 'elevator_capacity')}
+          {numField('출발 주기(slot)', elev.speed, (v) => updateNode(node.id, { elevator: { ...elev, speed: Math.round(v) } }), 'elevator_speed')}
+        </fieldset>
+      )}
+
+      {isSource && node.type !== 'elevator' && (
         <fieldset>
           <legend>발생 설정</legend>
           <label className="field">
@@ -137,6 +149,17 @@ export function NodeInspector({ nodeId }: { nodeId: string }) {
           {numField('하차 평균', train.alight_mean ?? 0, (v) => updateNode(node.id, { train: { ...train, alight_mean: v } }), 'alight_mean')}
           {(train.alight_kind === 'normal') &&
             numField('하차 표준편차', train.alight_std ?? 0, (v) => updateNode(node.id, { train: { ...train, alight_std: v } }), 'alight_std')}
+          <label className="field">
+            <span>열차 역할(mode)<InfoTip text={PARAM_HELP.train_mode} /></span>
+            <select
+              value={train.mode ?? 'both'}
+              onChange={(e) => updateNode(node.id, { train: { ...train, mode: e.target.value as TrainConfig['mode'] } })}
+            >
+              <option value="both">하차+탑승 (both)</option>
+              <option value="alight">하차만 (alight)</option>
+              <option value="board">탑승만 (board)</option>
+            </select>
+          </label>
         </fieldset>
       )}
 

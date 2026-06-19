@@ -21,7 +21,10 @@ export interface TrainConfig {
   alight_kind?: 'constant' | 'poisson' | 'normal'
   alight_mean?: number
   alight_std?: number
+  mode?: 'both' | 'alight' | 'board'
 }
+
+export interface ElevatorConfig { capacity: number; speed: number }
 
 export interface StationNode {
   id: string
@@ -36,6 +39,7 @@ export interface StationNode {
   group?: string
   generation?: GenerationConfig | null
   train?: TrainConfig | null
+  elevator?: ElevatorConfig | null
 }
 
 export interface StationLink {
