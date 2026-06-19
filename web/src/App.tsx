@@ -12,7 +12,7 @@ import { SimControls } from './components/SimControls'
 import { Dashboard } from './components/Dashboard'
 import { ExportPanel } from './components/ExportPanel'
 import { BatchPanel } from './components/BatchPanel'
-import { SAMPLE_TEMPLATES } from './templates'
+import { SAMPLE_TEMPLATES, loadTemplate } from './templates'
 
 export default function App() {
   const [selNode, setSelNode] = useState<string | null>(null)
@@ -26,8 +26,8 @@ export default function App() {
         <header>
           <h1>철도역사 혼잡도 합성데이터 시뮬레이터</h1>
           <select onChange={(e) => {
-            const t = SAMPLE_TEMPLATES.find((x) => x.name === e.target.value)
-            if (t) loadProject(t.project)
+            const project = loadTemplate(e.target.value)
+            if (project) loadProject(project)
           }} defaultValue="">
             <option value="" disabled>예제 템플릿 불러오기…</option>
             {SAMPLE_TEMPLATES.map((t) => <option key={t.name} value={t.name}>{t.name}</option>)}

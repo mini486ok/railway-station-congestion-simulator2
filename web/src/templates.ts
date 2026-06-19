@@ -31,3 +31,7 @@ function smallStation(): ProjectConfig {
 export const SAMPLE_TEMPLATES: { name: string; project: ProjectConfig }[] = [
   { name: '소형 역 (입구-게이트-승강장-출구)', project: smallStation() },
 ]
+
+export function loadTemplate(name: string): ProjectConfig | undefined {
+  return SAMPLE_TEMPLATES.find((t) => t.name === name)?.project
+}
