@@ -1,7 +1,6 @@
 import { useCallback } from 'react'
 import ReactFlow, {
   Background, Controls, type Connection, type NodeChange,
-  applyNodeChanges, type Node as RFNode,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { useStore } from '../store'
@@ -25,9 +24,12 @@ export function GraphEditor({ selectedNodeId, selectedLinkIndex, onSelectNode, o
   const rfEdges = toFlowEdges(links, selectedLinkIndex)
 
   const onNodesChange = useCallback((changes: NodeChange[]) => {
-    const updated = applyNodeChanges(changes, rfNodes) as RFNode[]
-    for (const u of updated) setPosition(u.id, u.position)
-  }, [rfNodes, setPosition])
+    for (const ch of changes) {
+      if (ch.type === 'position' && ch.position) {
+        setPosition(ch.id, ch.position)
+      }
+    }
+  }, [setPosition])
 
   const onConnect = useCallback((c: Connection) => {
     if (c.source && c.target) addLink(c.source, c.target)
