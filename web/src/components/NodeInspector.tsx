@@ -36,10 +36,10 @@ export function NodeInspector({ nodeId }: { nodeId: string }) {
   return (
     <div className="inspector">
       <h3>노드: {node.id}</h3>
-      <label className="field">
+      <label className="field" htmlFor="ni-node-name">
         <span>노드명</span>
         <input
-          aria-label="노드명"
+          id="ni-node-name"
           value={node.name}
           onChange={(e) => updateNode(node.id, { name: e.target.value })}
         />
@@ -81,7 +81,7 @@ export function NodeInspector({ nodeId }: { nodeId: string }) {
 
       {isSource && (
         <fieldset>
-          <legend>생성 설정</legend>
+          <legend>발생 설정</legend>
           <label className="field">
             <span>분포</span>
             <select

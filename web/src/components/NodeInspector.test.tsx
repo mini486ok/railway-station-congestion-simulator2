@@ -14,7 +14,7 @@ describe('NodeInspector', () => {
     const nameInput = screen.getByLabelText('노드명') as HTMLInputElement
     fireEvent.change(nameInput, { target: { value: '정문' } })
     expect(useStore.getState().nodes[0].name).toBe('정문')
-    expect(screen.getByText(/발생/)).toBeInTheDocument() // 발생 폼 노출
+    expect(screen.getByText('발생 설정')).toBeInTheDocument() // 발생 설정 fieldset 노출
   })
 
   it('does not show train form for passage', () => {
