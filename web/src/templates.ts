@@ -943,8 +943,12 @@ function initialCongestionStation(): ProjectConfig {
 // Template 12 — 초대형 복합 환승역 (10출입구·3노선·지하3층)
 // B1 대합실/게이트 → B2(호선1 상/하행 + 호선3 상행) / B3(호선2 상/하행 + 호선3 하행)
 // 총 노드: 20(출입구×2) + 6(B1 콘코스) + 4(게이트뱅크) +
-//          18(지상↔B1 수직) + 18(B1↔B2 수직) + 12(B1↔B3 수직) +
-//          12(플랫폼) + 4(환승통로) = 94 nodes
+//          12(지상↔B1 수직: 계단A·에스컬A·엘리베A 각 2기×동서) +
+//           6(B1↔B2 수직: 계단C·에스컬C·엘리베C 각 2기) +
+//           6(B1↔B3 수직: 계단D·에스컬D·엘리베D 각 2기) +
+//          12(플랫폼) + 4(환승통로) = 70 nodes
+// 환승통로 방향: 호선1 하차→TR12→호선2 승차 / 호선2 하차→TR23→호선3 승차
+//               호선3 하차→TR31→호선1 승차 / 호선1 하차→TR13→호선3 승차
 // ──────────────────────────────────────────────────────────────────────────────
 function megaComplexStation(): ProjectConfig {
   // ═══════════════════════════════════════════════════════════════════════
@@ -956,8 +960,9 @@ function megaComplexStation(): ProjectConfig {
   //   호선3 상행(B2): cap 160, hw 360s → 0.444/s
   //   호선3 하행(B3): cap 160, hw 360s → 0.444/s
   //   합계 boarding throughput ≈ 3.722/s
-  //   목표 입구 유입 ≈ 1.1× = 4.094/s → 10 입구에 분산
-  //   (출퇴근 첨두 profile 적용 입구는 평균값으로 산정)
+  //   목표 입구 유입 ≈ 1.0× = 3.72/s → 10 입구에 분산 (1.1배 이내 유지)
+  //   (출퇴근 첨두 profile 적용 입구7은 baseRate=0.4로 평균 산정, 최대배율×0.4≈0.4)
+  //   duration=7200s → profile 최대 breakpoint 5400s < 7200s (OK)
   // ═══════════════════════════════════════════════════════════════════════
 
   // ─── 지상 출입구 10쌍 ────────────────────────────────────────────────
@@ -969,32 +974,33 @@ function megaComplexStation(): ProjectConfig {
     mk('entrance', id, name, group, { area: 30, base_stay_prob: 0.2, exit_weight: 1.0, generation: null })
 
   // 동측 출입구 1~4
-  const mxe1i  = me('mx_e1i',  '1번 입구',       'mx_출입구1',  { generation: { kind: 'poisson', rate: 0.45 } })
+  // 총 유입 ≈ 3.43/s 정상, 첨두 시(e7i 피크) ≈ 4.0/s ≤ 1.1 × 3.722/s boarding cap
+  const mxe1i  = me('mx_e1i',  '1번 입구',       'mx_출입구1',  { generation: { kind: 'poisson', rate: 0.40 } })
   const mxe1o  = meo('mx_e1o', '1번 출구',       'mx_출입구1')
-  const mxe2i  = me('mx_e2i',  '2번 입구',       'mx_출입구2',  { generation: { kind: 'poisson', rate: 0.40 } })
+  const mxe2i  = me('mx_e2i',  '2번 입구',       'mx_출입구2',  { generation: { kind: 'poisson', rate: 0.35 } })
   const mxe2o  = meo('mx_e2o', '2번 출구',       'mx_출입구2')
-  // 출입구3: batch — 버스 환승객 묶음 도착 (버스 1대 ≈12명, rate=1배치/30s)
+  // 출입구3: batch — 버스 환승객 묶음 도착 (버스 1대 ≈12명, rate=1배치/30s → 평균 0.40/s)
   const mxe3i  = me('mx_e3i',  '3번 입구(버스환승)', 'mx_출입구3',
                     { generation: { kind: 'batch', rate: 0.033, batch_size: 12 } })
   const mxe3o  = meo('mx_e3o', '3번 출구',       'mx_출입구3')
-  const mxe4i  = me('mx_e4i',  '4번 입구',       'mx_출입구4',  { generation: { kind: 'poisson', rate: 0.35 } })
+  const mxe4i  = me('mx_e4i',  '4번 입구',       'mx_출입구4',  { generation: { kind: 'poisson', rate: 0.30 } })
   const mxe4o  = meo('mx_e4o', '4번 출구',       'mx_출입구4')
 
   // 서측 출입구 5~10
-  const mxe5i  = me('mx_e5i',  '5번 입구',       'mx_출입구5',  { generation: { kind: 'poisson', rate: 0.38 } })
+  const mxe5i  = me('mx_e5i',  '5번 입구',       'mx_출입구5',  { generation: { kind: 'poisson', rate: 0.33 } })
   const mxe5o  = meo('mx_e5o', '5번 출구',       'mx_출입구5')
-  const mxe6i  = me('mx_e6i',  '6번 입구',       'mx_출입구6',  { generation: { kind: 'poisson', rate: 0.30 } })
+  const mxe6i  = me('mx_e6i',  '6번 입구',       'mx_출입구6',  { generation: { kind: 'poisson', rate: 0.25 } })
   const mxe6o  = meo('mx_e6o', '6번 출구',       'mx_출입구6')
-  // 출입구7: time-varying profile — 출퇴근 첨두 패턴
+  // 출입구7: time-varying profile — 출퇴근 첨두 패턴 (baseRate=0.4, peak=1.0, ≤7200s)
   const mxe7i  = me('mx_e7i',  '7번 입구(첨두)', 'mx_출입구7',
                     { generation: { kind: 'poisson', rate: 0.4,
-                        profile: [[0, 0.15], [1800, 1.0], [3600, 1.0], [5400, 0.2]] } })
+                        profile: [[0, 0.4], [1800, 1.0], [3600, 1.0], [5400, 0.4], [7200, 0.4]] } })
   const mxe7o  = meo('mx_e7o', '7번 출구',       'mx_출입구7')
-  const mxe8i  = me('mx_e8i',  '8번 입구',       'mx_출입구8',  { generation: { kind: 'poisson', rate: 0.42 } })
+  const mxe8i  = me('mx_e8i',  '8번 입구',       'mx_출입구8',  { generation: { kind: 'poisson', rate: 0.35 } })
   const mxe8o  = meo('mx_e8o', '8번 출구',       'mx_출입구8')
-  const mxe9i  = me('mx_e9i',  '9번 입구',       'mx_출입구9',  { generation: { kind: 'poisson', rate: 0.50 } })
+  const mxe9i  = me('mx_e9i',  '9번 입구',       'mx_출입구9',  { generation: { kind: 'poisson', rate: 0.40 } })
   const mxe9o  = meo('mx_e9o', '9번 출구',       'mx_출입구9')
-  const mxe10i = me('mx_e10i', '10번 입구',      'mx_출입구10', { generation: { kind: 'poisson', rate: 0.33 } })
+  const mxe10i = me('mx_e10i', '10번 입구',      'mx_출입구10', { generation: { kind: 'poisson', rate: 0.28 } })
   const mxe10o = meo('mx_e10o','10번 출구',      'mx_출입구10')
 
   // ─── 지상↔B1 수직이동 (동측 3기 / 서측 3기) ────────────────────────
@@ -1203,15 +1209,23 @@ function megaComplexStation(): ProjectConfig {
     lnk('mx_b1Ci', 'mx_gAi', 40, 1),
     lnk('mx_b1Ci', 'mx_gBi', 40, 1),
 
-    // ── 동측 게이트(진입) → B1↔B2 수직하행 (호선1/호선3상행 방향) ────────
+    // ── 동측 게이트(진입) → B2 수직하행(70%) + B3 수직하행(30%) ──────────
+    // B2 → 호선1/호선3상행, B3 → 호선2/호선3하행 모두 접근 가능
     lnk('mx_gAi', 'mx_sC2Dn',  15, 1),
     lnk('mx_gAi', 'mx_esC2Dn', 10, 3),
     lnk('mx_gAi', 'mx_elC2Dn',  8, 0.4),
+    lnk('mx_gAi', 'mx_sD3Dn',  20, 0.43),   // 30% of total → B3
+    lnk('mx_gAi', 'mx_esD3Dn', 15, 1.29),
+    lnk('mx_gAi', 'mx_elD3Dn', 12, 0.17),
 
-    // ── 서측 게이트(진입) → B1↔B3 수직하행 (호선2/호선3하행 방향) ────────
+    // ── 서측 게이트(진입) → B3 수직하행(70%) + B2 수직하행(30%) ──────────
+    // B3 → 호선2/호선3하행, B2 → 호선1/호선3상행 모두 접근 가능
     lnk('mx_gBi', 'mx_sD3Dn',  15, 1),
     lnk('mx_gBi', 'mx_esD3Dn', 10, 3),
     lnk('mx_gBi', 'mx_elD3Dn',  8, 0.4),
+    lnk('mx_gBi', 'mx_sC2Dn',  20, 0.43),   // 30% of total → B2
+    lnk('mx_gBi', 'mx_esC2Dn', 15, 1.29),
+    lnk('mx_gBi', 'mx_elC2Dn', 12, 0.17),
 
     // ── B2 수직하행 → B2 플랫폼 (호선1 상행/하행 + 호선3 상행) ────────────
     // 70% 호선1, 30% 호선3 (호선3상행만 B2에 있음)
@@ -1271,11 +1285,11 @@ function megaComplexStation(): ProjectConfig {
     lnk('mx_L2dnA', 'mx_elD3Up', 10, 2.1),
     lnk('mx_L2dnA', 'mx_TR23',   45, 5.7),
 
-    // 호선3 하행 하차: 75% 출구방향, 25% L2환승
+    // 호선3 하행 하차: 75% 출구방향, 25% 호선1 환승 (TR31: 호선3→호선1)
     lnk('mx_L3dnA', 'mx_sD3Up',  20, 4.5),
     lnk('mx_L3dnA', 'mx_esD3Up', 15, 13.5),
     lnk('mx_L3dnA', 'mx_elD3Up', 10, 1.8),
-    lnk('mx_L3dnA', 'mx_TR23',   45, 6.65), // →호선3→호선2 (25%)
+    lnk('mx_L3dnA', 'mx_TR31',   45, 6.65), // →호선1 (25%) [FIX A: was TR23 self-loop]
 
     // ── 환승통로 → 목적 플랫폼 ──────────────────────────────────────────
     // L1→L2: 호선2 상행 또는 하행 (50:50)
@@ -1364,7 +1378,7 @@ function megaComplexStation(): ProjectConfig {
 
   return {
     graph: { nodes, links: finalizeWeights(nodes, links) },
-    config: { ...defaultSimConfig(), duration_seconds: 3600, dt_seconds: 5 },
+    config: { ...defaultSimConfig(), duration_seconds: 7200, dt_seconds: 5 },
   }
 }
 

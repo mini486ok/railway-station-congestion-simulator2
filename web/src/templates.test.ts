@@ -125,6 +125,37 @@ describe('templates', () => {
     )
     expect(hasTransferLink, 'Expected alight platform → transfer passage link').toBe(true)
   })
+
+  it('mega complex station: no transfer passage creates a same-line self-loop (FIX A)', () => {
+    // Each mx_TR<XY> passage id encodes source-line X and dest-line Y.
+    // Extract line from a platform id: mx_L1upB → "L1", mx_L3dnA → "L3"
+    const getLine = (nodeId: string): string | null => {
+      const m = nodeId.match(/^mx_(L\d)/)
+      return m ? m[1] : null
+    }
+    const t = SAMPLE_TEMPLATES.find((t) => t.name === '초대형 복합 환승역 (10출입구·3노선·지하3층)')
+    expect(t).toBeDefined()
+    const { nodes, links } = t!.project.graph
+    // Identify transfer passages by id prefix mx_TR
+    const transferPassageIds = new Set(nodes.filter((n) => n.id.startsWith('mx_TR')).map((n) => n.id))
+    // For each transfer passage, check every alight→passage link and passage→board link
+    // to ensure source-line ≠ dest-line
+    for (const passageId of transferPassageIds) {
+      const sourceAlightLines = links
+        .filter((l) => l.target === passageId)
+        .map((l) => getLine(l.source))
+        .filter(Boolean) as string[]
+      const destBoardLines = links
+        .filter((l) => l.source === passageId)
+        .map((l) => getLine(l.target))
+        .filter(Boolean) as string[]
+      for (const srcLine of sourceAlightLines) {
+        for (const dstLine of destBoardLines) {
+          expect(srcLine, `Transfer passage ${passageId}: source line ${srcLine} must differ from dest line ${dstLine}`).not.toBe(dstLine)
+        }
+      }
+    }
+  })
 })
 
 describe('loadTemplate', () => {
