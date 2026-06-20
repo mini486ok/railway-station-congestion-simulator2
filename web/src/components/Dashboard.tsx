@@ -96,7 +96,9 @@ export function Dashboard({ sim }: { sim: ReturnType<typeof useSimulation> }) {
             justifyContent: 'center', background: 'rgba(255,255,255,0.85)',
             color: '#555', fontSize: '0.95em', pointerEvents: 'none', textAlign: 'center',
           }}>
-            ▶ 재생 또는 ⚡ 즉시 실행을 눌러 시뮬레이션을 시작하세요.
+            {storeNodes.length === 0
+              ? '먼저 그래프를 구성한 뒤 실행하세요.'
+              : '▶ 재생 또는 ⚡ 즉시 실행을 눌러 시뮬레이션을 시작하세요.'}
           </div>
         )}
       </div>

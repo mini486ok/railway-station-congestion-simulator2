@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 
-from sim.io import load_config, history_to_csv, gnn_bundle, history_by_group
+from sim.io import load_config, history_to_csv, gnn_bundle, gnn_bundle_by_group, history_by_group
 from sim.engine import Engine
 
 _engine: Engine | None = None
@@ -16,9 +16,31 @@ def _require_engine() -> Engine:
     return _engine
 
 
+def _config_errors(graph, config) -> list[str]:
+    """graph/config 조합에서 발생하는 설정 오류 목록을 반환한다.
+
+    graph.validate()와 별도로, SimConfig 수준의 제약을 검사한다.
+    validate()와 load() 양쪽에서 동일한 로직을 공유하기 위해 분리됐다.
+    """
+    from sim.model import NodeType
+    errors: list[str] = []
+    if config.dt_seconds <= 0:
+        errors.append("dt_seconds는 0보다 커야 합니다")
+    if config.duration_seconds <= 0:
+        errors.append("duration_seconds는 0보다 커야 합니다")
+    for nd in graph.nodes:
+        if nd.type == NodeType.PLATFORM and nd.train is not None:
+            if nd.train.headway_sec < config.dt_seconds:
+                errors.append(
+                    f"노드 {nd.id}: 배차간격(headway_sec={nd.train.headway_sec})이 "
+                    f"Δt(dt_seconds={config.dt_seconds})보다 작아 열차가 누락됩니다"
+                )
+    return errors
+
+
 def validate(config_text: str) -> str:
-    graph, _ = load_config(config_text)
-    return json.dumps(graph.validate(), ensure_ascii=False)
+    graph, config = load_config(config_text)
+    return json.dumps(graph.validate() + _config_errors(graph, config), ensure_ascii=False)
 
 
 def _snapshot_text() -> str:
@@ -29,18 +51,9 @@ def _snapshot_text() -> str:
 def load(config_text: str) -> str:
     global _engine
     graph, config = load_config(config_text)
-    errors = graph.validate()
+    errors = graph.validate() + _config_errors(graph, config)
     if errors:
         raise ValueError("; ".join(errors))
-    # FIX 2: dt_seconds/duration_seconds 유효성 검사
-    if config.dt_seconds <= 0 or config.duration_seconds <= 0:
-        raise ValueError("dt_seconds와 duration_seconds는 0보다 커야 합니다")
-    # FIX 5: headway < dt → 열차 누락 가드
-    from sim.model import NodeType
-    for nd in graph.nodes:
-        if nd.type == NodeType.PLATFORM and nd.train is not None:
-            if nd.train.headway_sec < config.dt_seconds:
-                raise ValueError("배차간격(headway)이 Δt(dt_seconds)보다 작아 열차가 누락됩니다")
     _engine = Engine(graph, config)
     # 유효 그룹 레이블: group 있으면 그대로, 없으면 node.id
     node_map = {nd.id: nd for nd in graph.nodes}
@@ -93,6 +106,12 @@ def export_csv(layout: str = "wide") -> str:
 def export_gnn() -> str:
     eng = _require_engine()
     return json.dumps(gnn_bundle(eng.graph), ensure_ascii=False)
+
+
+def export_gnn_group() -> str:
+    """그룹 단위 GNN 번들 JSON을 반환한다."""
+    eng = _require_engine()
+    return json.dumps(gnn_bundle_by_group(eng.graph), ensure_ascii=False)
 
 
 def export_group_csv() -> str:

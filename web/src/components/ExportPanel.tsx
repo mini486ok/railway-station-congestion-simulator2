@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { useStore } from '../store'
-import { saveText, saveBlob, bundleToZip } from '../download'
+import { saveText, saveCsv, saveBlob, bundleToZip } from '../download'
 import type { useSimulation } from '../useSimulation'
 import type { ProjectConfig } from '../types'
 
@@ -16,7 +16,7 @@ export function ExportPanel({ sim }: { sim: ReturnType<typeof useSimulation> }) 
     try {
       if (sim.status !== 'done' || sim.dirty) { const ok = await sim.runInstant(); if (!ok) return }
       const csv = await sim.getClient().exportCsv('wide')
-      saveText('congestion_timeseries.csv', csv)
+      saveCsv('congestion_timeseries.csv', csv)
     } catch (e) {
       alert(`CSV 내보내기 실패: ${e}`)
     }
@@ -27,7 +27,7 @@ export function ExportPanel({ sim }: { sim: ReturnType<typeof useSimulation> }) 
     try {
       if (sim.status !== 'done' || sim.dirty) { const ok = await sim.runInstant(); if (!ok) return }
       const csv = await sim.getClient().exportGroupCsv()
-      saveText('congestion_by_group.csv', csv)
+      saveCsv('congestion_by_group.csv', csv)
     } catch (e) {
       alert(`그룹 혼잡도 CSV 내보내기 실패: ${e}`)
     }
@@ -47,6 +47,23 @@ export function ExportPanel({ sim }: { sim: ReturnType<typeof useSimulation> }) 
       saveBlob('gnn_bundle.zip', await bundleToZip(files))
     } catch (e) {
       alert(`GNN 번들 내보내기 실패: ${e}`)
+    }
+  }
+
+  async function exportGnnGroup() {
+    if (busy) return
+    try {
+      if (sim.status !== 'done' || sim.dirty) { const ok = await sim.runInstant(); if (!ok) return }
+      const bundle = await sim.getClient().exportGnnGroup()
+      const files: Record<string, string> = {
+        'adjacency_group.csv': bundle.adjacency,
+        'distance_group.csv': bundle.distance,
+        'travel_time_group.csv': bundle.travel_time,
+        'group_features.csv': bundle.group_features,
+      }
+      saveBlob('gnn_bundle_group.zip', await bundleToZip(files))
+    } catch (e) {
+      alert(`그룹 GNN 번들 내보내기 실패: ${e}`)
     }
   }
 
@@ -71,6 +88,9 @@ export function ExportPanel({ sim }: { sim: ReturnType<typeof useSimulation> }) 
           alert('유효한 설정 파일이 아닙니다(graph.nodes/links 누락).')
           return
         }
+        if (useStore.getState().nodes.length > 0) {
+          if (!window.confirm('현재 구성을 덮어씁니다. 계속할까요?')) return
+        }
         loadProject(project)
       } catch (err) { alert(`불러오기 실패: ${err}`) }
     }
@@ -82,20 +102,27 @@ export function ExportPanel({ sim }: { sim: ReturnType<typeof useSimulation> }) 
   return (
     <div className="export-panel">
       <strong>내보내기 / 설정</strong>
-      <div style={{ fontSize: '0.8em', color: '#666', margin: '2px 0 4px' }}>내보내기 시 시뮬레이션이 자동 실행됩니다(결과가 없으면).</div>
+      <div style={{ fontSize: '0.8em', color: '#666', margin: '2px 0 4px' }}>내보내기 시 결과가 없으면 시뮬레이션을 자동으로 실행한 뒤 저장합니다.</div>
       {sim.status === 'running' && (
-        <div style={{ fontSize: '0.85em', color: '#664400', margin: '4px 0', fontStyle: 'italic' }}>
-          시뮬레이션 실행 중… 잠시만 기다려 주세요
+        <div style={{ fontSize: '0.88em', color: '#664400', background: '#fff8e8', border: '1px solid #e6c060', borderRadius: 4, padding: '5px 8px', margin: '4px 0', fontWeight: 600 }}>
+          ⏳ 시뮬레이션 실행 후 저장합니다… 잠시만 기다려 주세요
         </div>
       )}
-      <div className="row">
-        <button onClick={() => void exportCsv()} disabled={busy}>혼잡도 CSV</button>
-        <button onClick={() => void exportGroupCsv()} disabled={busy}>그룹 혼잡도 CSV</button>
-        <button onClick={() => void exportGnn()} disabled={busy}>GNN 번들(zip)</button>
-        <button onClick={saveConfig}>설정 JSON 저장</button>
-        <button onClick={() => fileRef.current?.click()}>설정 불러오기</button>
-        <input ref={fileRef} type="file" accept="application/json"
-          style={{ display: 'none' }} onChange={onLoadFile} />
+      <div style={{ marginTop: 6 }}>
+        <div style={{ fontSize: '11px', fontWeight: 600, color: '#446', marginBottom: 4 }}>기본 내보내기</div>
+        <div className="row">
+          <button onClick={() => void exportCsv()} disabled={busy}>혼잡도 CSV</button>
+          <button onClick={saveConfig}>설정 JSON 저장</button>
+          <button onClick={() => fileRef.current?.click()}>설정 불러오기</button>
+          <input ref={fileRef} type="file" accept="application/json"
+            style={{ display: 'none' }} onChange={onLoadFile} />
+        </div>
+        <div style={{ fontSize: '11px', fontWeight: 600, color: '#446', marginTop: 6, marginBottom: 4 }}>GNN·그룹 (고급)</div>
+        <div className="row">
+          <button onClick={() => void exportGroupCsv()} disabled={busy}>그룹 혼잡도 CSV</button>
+          <button onClick={() => void exportGnn()} disabled={busy}>GNN 번들(노드, zip)</button>
+          <button onClick={() => void exportGnnGroup()} disabled={busy}>GNN 번들(그룹, zip)</button>
+        </div>
       </div>
     </div>
   )

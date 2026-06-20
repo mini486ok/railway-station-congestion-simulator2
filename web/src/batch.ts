@@ -35,7 +35,14 @@ export function buildRunConfigs(base: ProjectConfig, spec: BatchSpec): ProjectCo
       const [lo, hi] = spec.varyEntranceRate
       const r = lo + rnd() * (hi - lo)
       for (const n of cfg.graph.nodes) {
-        if (n.type === 'entrance' && n.generation && (n.generation.kind === 'poisson' || n.generation.kind === 'constant')) {
+        if (n.type === 'entrance' && n.generation && (n.generation.kind === 'poisson' || n.generation.kind === 'constant' || n.generation.kind === 'batch')) {
+          const profile = n.generation.profile
+          if (profile && profile.length > 0) {
+            // profile-based entrances: scale every profile entry's rate by factor
+            const baseRate = n.generation.rate ?? profile[0][1] ?? 1
+            const factor = r / (baseRate || 1)
+            n.generation.profile = profile.map(([t, pr]) => [t, pr * factor])
+          }
           n.generation.rate = r
         }
       }

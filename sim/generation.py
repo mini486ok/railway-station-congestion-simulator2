@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 import numpy as np
 
 from sim.model import GenerationConfig, TrainConfig
@@ -17,7 +16,11 @@ class ZeroGenerator(Generator):
 
 
 def _rate_at(cfg: GenerationConfig, t_sec: float) -> float:
-    """profile이 있으면 계단식 시간가변 rate, 없으면 고정 rate. (입력 순서 무관)"""
+    """profile이 있으면 계단식 시간가변 rate, 없으면 고정 rate. (입력 순서 무관)
+
+    첫 번째 profile 브레이크포인트 이전(t_sec < 첫 ts)에는 기본값 cfg.rate 사용.
+    각 프로파일 점은 해당 시각 이후부터 계단식으로 적용된다(step function).
+    """
     if not cfg.profile:
         return cfg.rate
     entries = sorted(cfg.profile, key=lambda e: e[0])
@@ -43,18 +46,29 @@ class RateGenerator(Generator):
         return float(max(mean, 0.0))
 
 
-class NormalPulseGenerator(Generator):
+class BatchGenerator(Generator):
+    """진짜 Compound Poisson 군집 발생기.
+
+    rate는 배치 도착률(batches/sec), batch_size는 배치당 평균 인원.
+    확률론 모드: 배치 수 N ~ Poisson(lam), 각 배치 크기 S_i ~ Poisson(batch_size),
+    총 인원 = sum(S_i, i=1..N). 이로써 분산이 과소추정되지 않는다.
+    결정론 모드: lam * batch_size (기대값 보존).
+    """
     def __init__(self, cfg: GenerationConfig):
         self.cfg = cfg
 
     def amount(self, t_step, dt, rng, stochastic) -> float:
         t_sec = t_step * dt
-        s = max(self.cfg.sigma_sec, 1e-9)
-        pdf = math.exp(-0.5 * ((t_sec - self.cfg.center_sec) / s) ** 2) / (s * math.sqrt(2 * math.pi))
-        mean = self.cfg.total * pdf * dt
+        lam = _rate_at(self.cfg, t_sec) * dt   # 이 스텝에서 기대 배치 수
         if stochastic:
-            return float(rng.poisson(max(mean, 0.0)))
-        return float(max(mean, 0.0))
+            num_batches = int(rng.poisson(max(lam, 0.0)))
+            if num_batches > 0:
+                people = float(rng.poisson(max(self.cfg.batch_size, 0.0), size=num_batches).sum())
+            else:
+                people = 0.0
+            return people
+        else:
+            return float(max(lam, 0.0)) * self.cfg.batch_size
 
 
 def build_generator(cfg: GenerationConfig | None) -> Generator:
@@ -62,8 +76,8 @@ def build_generator(cfg: GenerationConfig | None) -> Generator:
         return ZeroGenerator()
     if cfg.kind in ("constant", "poisson"):
         return RateGenerator(cfg)
-    if cfg.kind == "normal_pulse":
-        return NormalPulseGenerator(cfg)
+    if cfg.kind == "batch":
+        return BatchGenerator(cfg)
     raise ValueError(f"알 수 없는 발생 종류: {cfg.kind}")
 
 

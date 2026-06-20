@@ -174,36 +174,28 @@ def test_generation_rate_inf_raises_error():
         f"예상 오류 없음: {errs}"
 
 
-def test_normal_pulse_sigma_zero_raises_error():
-    """normal_pulse sigma_sec=0이면 '정규펄스 sigma_sec는 0보다 커야 함' 오류가 나야 한다."""
-    g = _entrance_with_gen(GenerationConfig(kind="normal_pulse", sigma_sec=0.0, total=100.0))
+def test_batch_size_zero_raises_error():
+    """batch kind에서 batch_size=0이면 '군집 크기(batch_size)는 0보다 커야 함' 오류가 나야 한다."""
+    g = _entrance_with_gen(GenerationConfig(kind="batch", rate=1.0, batch_size=0.0))
     errs = g.validate()
-    assert any("정규펄스 sigma_sec" in e and "E" in e for e in errs), \
+    assert any("군집 크기(batch_size)는 0보다 커야 함" in e and "E" in e for e in errs), \
         f"예상 오류 없음: {errs}"
 
 
-def test_normal_pulse_sigma_negative_raises_error():
-    """normal_pulse sigma_sec<0이면 오류가 나야 한다."""
-    g = _entrance_with_gen(GenerationConfig(kind="normal_pulse", sigma_sec=-1.0, total=100.0))
+def test_batch_size_negative_raises_error():
+    """batch kind에서 batch_size<0이면 오류가 나야 한다."""
+    g = _entrance_with_gen(GenerationConfig(kind="batch", rate=1.0, batch_size=-1.0))
     errs = g.validate()
-    assert any("정규펄스 sigma_sec" in e and "E" in e for e in errs), \
+    assert any("군집 크기(batch_size)는 0보다 커야 함" in e and "E" in e for e in errs), \
         f"예상 오류 없음: {errs}"
 
 
-def test_normal_pulse_total_negative_raises_error():
-    """normal_pulse total<0이면 오류가 나야 한다."""
-    g = _entrance_with_gen(GenerationConfig(kind="normal_pulse", sigma_sec=10.0, total=-5.0))
+def test_batch_size_positive_ok():
+    """batch kind에서 batch_size>0이면 관련 오류 없어야 한다."""
+    g = _entrance_with_gen(GenerationConfig(kind="batch", rate=1.0, batch_size=5.0))
     errs = g.validate()
-    assert any("정규펄스" in e and "total" in e and "E" in e for e in errs), \
-        f"예상 오류 없음: {errs}"
-
-
-def test_normal_pulse_sigma_positive_ok():
-    """normal_pulse sigma_sec>0, total>=0이면 관련 오류 없어야 한다."""
-    g = _entrance_with_gen(GenerationConfig(kind="normal_pulse", sigma_sec=10.0, total=100.0))
-    errs = g.validate()
-    pulse_errs = [e for e in errs if "정규펄스" in e]
-    assert pulse_errs == [], f"sigma>0,total>=0은 유효해야 함: {pulse_errs}"
+    batch_errs = [e for e in errs if "군집 크기" in e]
+    assert batch_errs == [], f"batch_size>0은 유효해야 함: {batch_errs}"
 
 
 def test_profile_malformed_not_list_raises_error():

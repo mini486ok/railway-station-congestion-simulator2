@@ -25,11 +25,19 @@ def test_weight_sum_must_be_one():
     assert any("가중치 합" in e for e in errs)
 
 
-def test_generation_only_on_source_types():
+def test_generation_only_on_entrance():
     g = _ok_graph()
     g.nodes.append(Node(id="C", name="통로", type=NodeType.PASSAGE, area=10,
                         base_stay_prob=1.0, generation=GenerationConfig(kind="constant", rate=1.0)))
     assert any("발생" in e for e in g.validate())
+
+
+def test_platform_generation_now_invalid():
+    """승강장에 generation을 붙이면 오류가 나야 한다(rev4: 출입구 전용)."""
+    g = _ok_graph()
+    g.nodes[1].generation = GenerationConfig(kind="constant", rate=1.0)
+    errs = g.validate()
+    assert any("발생(generation)은 출입구" in e for e in errs)
 
 
 def test_platform_requires_train():
@@ -254,67 +262,14 @@ def test_invalid_generation_kind_raises_error():
 
 
 def test_valid_generation_kinds_ok():
-    """generation.kind 가 constant/poisson/normal_pulse/none 이면 오류 없어야 한다."""
-    for kind in ("constant", "poisson", "normal_pulse", "none"):
+    """generation.kind 가 constant/poisson/batch/none 이면 오류 없어야 한다."""
+    for kind in ("constant", "poisson", "batch", "none"):
         n = Node(id="E1", name="입구", type=NodeType.ENTRANCE, area=50, base_stay_prob=0.2,
                  exit_weight=0.0, generation=GenerationConfig(kind=kind, rate=1.0))
         g = StationGraph(nodes=[n], links=[])
         errs = g.validate()
         gen_errs = [e for e in errs if "발생 분포" in e]
         assert gen_errs == [], f"kind={kind}에서 오류 발생: {gen_errs}"
-
-
-# ─────────────────────────────────────────────
-# FIX 3: NormalPulse 잘림 경고 (duration_seconds 옵션 파라미터)
-# ─────────────────────────────────────────────
-
-def test_normal_pulse_truncation_warning_left():
-    """normal_pulse의 center - 3*sigma < 0 이면 경고를 반환해야 한다."""
-    n = Node(id="E1", name="입구", type=NodeType.ENTRANCE, area=50, base_stay_prob=0.2,
-             exit_weight=0.0,
-             generation=GenerationConfig(kind="normal_pulse",
-                                         center_sec=10.0, sigma_sec=5.0, total=100.0))
-    # center - 3*sigma = 10 - 15 = -5 < 0 → 경고
-    g = StationGraph(nodes=[n], links=[])
-    errs = g.validate(duration_seconds=3600.0)
-    assert any("정규펄스" in e and "E1" in e for e in errs), f"경고 없음: {errs}"
-
-
-def test_normal_pulse_truncation_warning_right():
-    """normal_pulse의 center + 3*sigma > duration 이면 경고를 반환해야 한다."""
-    n = Node(id="E1", name="입구", type=NodeType.ENTRANCE, area=50, base_stay_prob=0.2,
-             exit_weight=0.0,
-             generation=GenerationConfig(kind="normal_pulse",
-                                         center_sec=3590.0, sigma_sec=5.0, total=100.0))
-    # center + 3*sigma = 3590 + 15 = 3605 > 3600 → 경고
-    g = StationGraph(nodes=[n], links=[])
-    errs = g.validate(duration_seconds=3600.0)
-    assert any("정규펄스" in e and "E1" in e for e in errs), f"경고 없음: {errs}"
-
-
-def test_normal_pulse_no_warning_when_within_duration():
-    """normal_pulse가 시뮬레이션 구간 내에 있으면 경고 없어야 한다."""
-    n = Node(id="E1", name="입구", type=NodeType.ENTRANCE, area=50, base_stay_prob=0.2,
-             exit_weight=0.0,
-             generation=GenerationConfig(kind="normal_pulse",
-                                         center_sec=1800.0, sigma_sec=100.0, total=100.0))
-    # center - 3*sigma = 1800 - 300 = 1500 > 0, center + 3*sigma = 2100 < 3600 → OK
-    g = StationGraph(nodes=[n], links=[])
-    errs = g.validate(duration_seconds=3600.0)
-    pulse_errs = [e for e in errs if "정규펄스" in e]
-    assert pulse_errs == [], f"경고가 있어서는 안 됨: {pulse_errs}"
-
-
-def test_normal_pulse_no_warning_without_duration():
-    """duration_seconds 미지정 시 정규펄스 경고가 없어야 한다(기존 동작 유지)."""
-    n = Node(id="E1", name="입구", type=NodeType.ENTRANCE, area=50, base_stay_prob=0.2,
-             exit_weight=0.0,
-             generation=GenerationConfig(kind="normal_pulse",
-                                         center_sec=10.0, sigma_sec=5.0, total=100.0))
-    g = StationGraph(nodes=[n], links=[])
-    errs = g.validate()  # duration 미지정
-    pulse_errs = [e for e in errs if "정규펄스" in e]
-    assert pulse_errs == [], f"duration 미지정 시 경고 없어야 함: {pulse_errs}"
 
 
 # ─────────────────────────────────────────────

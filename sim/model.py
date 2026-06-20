@@ -30,13 +30,11 @@ class WeidmannParams:
 
 @dataclass
 class GenerationConfig:
-    # kind: "constant" | "poisson" | "normal_pulse" | "none"
+    # kind: "constant" | "poisson" | "batch" | "none"
     kind: str
-    rate: float = 0.0                       # 초당 발생률 (constant/poisson)
+    rate: float = 0.0                       # 초당 발생률 (constant/poisson) 또는 배치 도착률 (batch: batches/sec)
     profile: list | None = None             # 시간가변 [[t_sec, rate], ...] (옵션)
-    center_sec: float = 0.0                 # normal_pulse 중심 시각
-    sigma_sec: float = 1.0                  # normal_pulse 표준편차
-    total: float = 0.0                      # normal_pulse 총 발생 인원
+    batch_size: float = 1.0                 # 군집 크기(batch: 배치당 평균 승객 수)
 
 
 @dataclass
@@ -197,8 +195,10 @@ class StationGraph:
                     errors.append(
                         f"노드 {n.id}: 이동인원이 갈 곳이 없음(출력/exit 없음, 체류확률<1)")
 
-            if n.generation is not None and n.type not in (NodeType.ENTRANCE, NodeType.PLATFORM):
-                errors.append(f"노드 {n.id}: 발생은 출입구/승강장만 가능")
+            if (n.generation is not None
+                    and n.generation.kind != "none"
+                    and n.type != NodeType.ENTRANCE):
+                errors.append(f"노드 {n.id}: 발생(generation)은 출입구(entrance)에서만 가능합니다")
             if n.type == NodeType.PLATFORM and n.train is None:
                 errors.append(f"노드 {n.id}: 승강장은 열차 설정(train)이 필요")
             if n.type != NodeType.PLATFORM and n.train is not None:
@@ -215,7 +215,7 @@ class StationGraph:
                         errors.append(f"노드 {n.id}: elevator speed는 1 이상이어야 함")
                 if n.train is not None:
                     errors.append(f"노드 {n.id}: 엘리베이터 노드에는 열차 설정(train)이 불가")
-                if n.generation is not None:
+                if n.generation is not None and n.generation.kind != "none":
                     errors.append(f"노드 {n.id}: 엘리베이터 노드에는 발생 설정(generation)이 불가")
                 # FIX 3: 유출 경로 없으면 방출 인원이 사라짐(mass loss)
                 if out_count[n.id] == 0 and n.exit_weight == 0:
@@ -241,23 +241,22 @@ class StationGraph:
                 if train.mode not in ("both", "alight", "board"):
                     errors.append(f"노드 {n.id}: 열차 mode는 both/alight/board 중 하나")
 
-            # FIX 2: generation.kind 유효성 검사 + FIX 4: 파라미터 범위 검사
+            # generation.kind 유효성 검사 + 파라미터 범위 검사
             if n.generation is not None:
                 gen = n.generation
-                if gen.kind not in ("constant", "poisson", "normal_pulse", "none"):
+                if gen.kind not in ("constant", "poisson", "batch", "none"):
                     errors.append(f"노드 {n.id}: 발생 분포 종류가 올바르지 않음")
-                # FIX 4a: rate 범위 검사 (constant/poisson)
-                if gen.kind in ("constant", "poisson"):
+                # rate 범위 검사 (constant/poisson/batch)
+                if gen.kind in ("constant", "poisson", "batch"):
                     if not (isinstance(gen.rate, (int, float))
                             and math.isfinite(gen.rate) and gen.rate >= 0):
                         errors.append(f"노드 {n.id}: 발생률(rate)은 0 이상이어야 함")
-                # FIX 4b: normal_pulse 파라미터 검사
-                if gen.kind == "normal_pulse":
-                    if gen.sigma_sec <= 0:
-                        errors.append(f"노드 {n.id}: 정규펄스 sigma_sec는 0보다 커야 함")
-                    if gen.total < 0:
-                        errors.append(f"노드 {n.id}: 정규펄스 total(총 발생 인원)은 0 이상이어야 함")
-                # FIX 4c: profile 형식 검사
+                # batch 파라미터 검사
+                if gen.kind == "batch":
+                    if not (isinstance(gen.batch_size, (int, float))
+                            and math.isfinite(gen.batch_size) and gen.batch_size > 0):
+                        errors.append(f"노드 {n.id}: 군집 크기(batch_size)는 0보다 커야 함")
+                # profile 형식 검사
                 if gen.profile is not None:
                     try:
                         valid_profile = (
@@ -278,18 +277,6 @@ class StationGraph:
                         valid_profile = False
                     if not valid_profile:
                         errors.append(f"노드 {n.id}: 발생 profile 형식이 올바르지 않음")
-
-            # FIX 3: NormalPulse 잘림 경고 (duration_seconds 제공 시)
-            if (duration_seconds is not None
-                    and n.generation is not None
-                    and n.generation.kind == "normal_pulse"):
-                gen = n.generation
-                if (gen.center_sec - 3 * gen.sigma_sec < 0
-                        or gen.center_sec + 3 * gen.sigma_sec > duration_seconds):
-                    errors.append(
-                        f"노드 {n.id}: 정규펄스가 시뮬레이션 구간[0,{duration_seconds}]을"
-                        f" 벗어나 총 발생 인원이 total보다 적을 수 있음"
-                    )
 
         # 그룹 일관성 검사 (group 필드가 비어 있지 않은 노드만 대상)
         from collections import defaultdict

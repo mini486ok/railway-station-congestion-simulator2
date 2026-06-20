@@ -36,12 +36,28 @@ def test_profile_time_varying_rate():
     assert g.amount(6, 10.0, np.random.default_rng(0), False) == 40.0   # t=60s, rate4
 
 
-def test_normal_pulse_total_conserved():
-    cfg = GenerationConfig(kind="normal_pulse", center_sec=50.0, sigma_sec=10.0, total=1000.0)
+def test_batch_deterministic():
+    """batch 결정론: rate * dt * batch_size."""
+    cfg = GenerationConfig(kind="batch", rate=2.0, batch_size=5.0)
     g = build_generator(cfg)
-    dt = 1.0
-    total = sum(g.amount(t, dt, np.random.default_rng(0), False) for t in range(0, 100))
-    assert abs(total - 1000.0) < 5.0   # 펄스 적분 ≈ total
+    # 결정론: 2.0 * 5.0 * 5.0 = 50.0
+    assert g.amount(0, 5.0, np.random.default_rng(0), False) == 50.0
+
+
+def test_batch_stochastic_nonneg_and_mean():
+    """batch 확률론(진짜 Compound Poisson): 반환값은 비음수 정수이며 대표본 평균은 rate*dt*batch_size에 수렴."""
+    cfg = GenerationConfig(kind="batch", rate=2.0, batch_size=3.0)
+    g = build_generator(cfg)
+    rng = np.random.default_rng(7)
+    samples = [g.amount(0, 5.0, rng, True) for _ in range(3000)]
+    # 비음수
+    assert all(v >= 0.0 for v in samples)
+    # 정수값 (각 배치 크기도 Poisson 표본이므로 합도 정수)
+    assert all(float(v).is_integer() for v in samples)
+    # 평균 ≈ rate*dt*batch_size = 2.0*5.0*3.0 = 30.0
+    assert abs(np.mean(samples) - 30.0) < 1.5
+    # 분산이 존재해야 함 (단순 고정 batch_size 모델보다 분산 크거나 같음)
+    assert np.var(samples) > 0.0
 
 
 def test_train_arrival_steps_periodic():

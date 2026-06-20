@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { validateGraph } from './validation'
+import { validateGraph, validateConfig } from './validation'
 import { makeNode, makeLink } from './defaults'
-import type { StationGraphJSON } from './types'
+import type { StationGraphJSON, SimConfig } from './types'
 
 function okGraph(): StationGraphJSON {
   const a = makeNode('entrance', 'A')
@@ -28,13 +28,27 @@ describe('validateGraph', () => {
     expect(validateGraph(g).some((e) => e.includes('가중치 합'))).toBe(true)
   })
 
-  it('flags generation on non-source type', () => {
+  it('flags generation on non-entrance type (passage)', () => {
     const g = okGraph()
     const c = makeNode('passage', 'C')
     c.base_stay_prob = 1.0
     c.generation = { kind: 'constant', rate: 1.0 }
     g.nodes.push(c)
-    expect(validateGraph(g).some((e) => e.includes('발생'))).toBe(true)
+    expect(validateGraph(g).some((e) => e.includes('발생(generation)은 출입구에서만 가능합니다'))).toBe(true)
+  })
+
+  it('flags generation on platform (entrance-only rule)', () => {
+    const g = okGraph()
+    const p = g.nodes.find((n) => n.type === 'platform')!
+    p.generation = { kind: 'poisson', rate: 1.0 }
+    expect(validateGraph(g).some((e) => e.includes('발생(generation)은 출입구에서만 가능합니다'))).toBe(true)
+  })
+
+  it('allows generation on entrance', () => {
+    const g = okGraph()
+    const a = g.nodes.find((n) => n.type === 'entrance')!
+    a.generation = { kind: 'poisson', rate: 1.0 }
+    expect(validateGraph(g).filter((e) => e.includes('발생(generation)은 출입구에서만 가능합니다'))).toHaveLength(0)
   })
 
   it('flags platform without train', () => {
@@ -146,11 +160,18 @@ describe('validateGraph', () => {
     expect(validateGraph(g).some((e) => e.includes('발생률(rate)'))).toBe(false)
   })
 
-  it('flags normal_pulse sigma_sec = 0', () => {
+  it('flags batch generation with batch_size <= 0', () => {
     const g = okGraph()
     const a = g.nodes.find((n) => n.type === 'entrance')!
-    a.generation = { kind: 'normal_pulse', sigma_sec: 0, total: 100 }
-    expect(validateGraph(g).some((e) => e.includes('sigma_sec는 0보다 커야 함'))).toBe(true)
+    a.generation = { kind: 'batch', rate: 1.0, batch_size: 0 }
+    expect(validateGraph(g).some((e) => e.includes('군집 크기(batch_size)는 0보다 커야 함'))).toBe(true)
+  })
+
+  it('allows batch generation with valid batch_size', () => {
+    const g = okGraph()
+    const a = g.nodes.find((n) => n.type === 'entrance')!
+    a.generation = { kind: 'batch', rate: 1.0, batch_size: 5 }
+    expect(validateGraph(g).some((e) => e.includes('군집 크기(batch_size)'))).toBe(false)
   })
 
   it('flags malformed profile (negative time)', () => {
@@ -158,5 +179,110 @@ describe('validateGraph', () => {
     const a = g.nodes.find((n) => n.type === 'entrance')!
     a.generation = { kind: 'constant', rate: 1, profile: [[-10, 2], [50, 5]] }
     expect(validateGraph(g).some((e) => e.includes('발생 profile 형식이 올바르지 않음'))).toBe(true)
+  })
+
+  it('makeNode platform has generation === null', () => {
+    const p = makeNode('platform', 'P1')
+    expect(p.generation).toBeNull()
+  })
+
+  it('makeNode entrance has generation.kind === poisson', () => {
+    const e = makeNode('entrance', 'E1')
+    expect(e.generation?.kind).toBe('poisson')
+  })
+
+  // ── R4-R1 추가 검증 ──
+
+  it('generation kind=none on passage node → no entrance-only error', () => {
+    const g = okGraph()
+    const c = makeNode('passage', 'C')
+    c.base_stay_prob = 1.0
+    c.generation = { kind: 'none' }
+    g.nodes.push(c)
+    expect(validateGraph(g).some((e) => e.includes('발생(generation)은 출입구에서만 가능합니다'))).toBe(false)
+  })
+
+  it('generation kind=poisson on passage → entrance-only error', () => {
+    const g = okGraph()
+    const c = makeNode('passage', 'C')
+    c.base_stay_prob = 1.0
+    c.generation = { kind: 'poisson', rate: 1.0 }
+    g.nodes.push(c)
+    expect(validateGraph(g).some((e) => e.includes('발생(generation)은 출입구에서만 가능합니다'))).toBe(true)
+  })
+})
+
+function defaultConfig(): SimConfig {
+  return {
+    dt_seconds: 1,
+    duration_seconds: 3600,
+    default_walk_speed: 1.34,
+    stochastic: true,
+    seed: 42,
+    observation_noise_std: 0,
+    missing_prob: 0,
+  }
+}
+
+describe('validateConfig', () => {
+  it('valid config → no errors', () => {
+    const g = okGraph()
+    expect(validateConfig(g, defaultConfig())).toEqual([])
+  })
+
+  it('dt_seconds <= 0 → error', () => {
+    const g = okGraph()
+    expect(validateConfig(g, { ...defaultConfig(), dt_seconds: 0 }).some((e) => e.includes('dt_seconds는 0보다 커야 합니다'))).toBe(true)
+    expect(validateConfig(g, { ...defaultConfig(), dt_seconds: -1 }).some((e) => e.includes('dt_seconds는 0보다 커야 합니다'))).toBe(true)
+  })
+
+  it('duration_seconds <= 0 → error', () => {
+    const g = okGraph()
+    expect(validateConfig(g, { ...defaultConfig(), duration_seconds: 0 }).some((e) => e.includes('duration_seconds는 0보다 커야 합니다'))).toBe(true)
+  })
+
+  it('headway_sec < dt_seconds → error', () => {
+    const g = okGraph()
+    // platform P has headway_sec=300; dt=400 → 300 < 400
+    expect(validateConfig(g, { ...defaultConfig(), dt_seconds: 400 }).some((e) => e.includes('배차간격(headway)이 Δt(dt_seconds)보다 작아'))).toBe(true)
+  })
+
+  it('headway_sec >= dt_seconds → no headway error', () => {
+    const g = okGraph()
+    // headway=300, dt=1 → OK
+    expect(validateConfig(g, defaultConfig()).some((e) => e.includes('배차간격'))).toBe(false)
+  })
+
+  // ── R4-R2 유한성 검사 ──
+
+  it('dt_seconds NaN → 유효한 숫자 오류', () => {
+    const g = okGraph()
+    const errs = validateConfig(g, { ...defaultConfig(), dt_seconds: NaN })
+    expect(errs.some((e) => e.includes('dt_seconds는 유효한 숫자여야 합니다'))).toBe(true)
+  })
+
+  it('dt_seconds Infinity → 유효한 숫자 오류', () => {
+    const g = okGraph()
+    const errs = validateConfig(g, { ...defaultConfig(), dt_seconds: Infinity })
+    expect(errs.some((e) => e.includes('dt_seconds는 유효한 숫자여야 합니다'))).toBe(true)
+  })
+
+  it('duration_seconds NaN → 유효한 숫자 오류', () => {
+    const g = okGraph()
+    const errs = validateConfig(g, { ...defaultConfig(), duration_seconds: NaN })
+    expect(errs.some((e) => e.includes('duration_seconds는 유효한 숫자여야 합니다'))).toBe(true)
+  })
+
+  it('dt_seconds finite valid → no error', () => {
+    const g = okGraph()
+    expect(validateConfig(g, { ...defaultConfig(), dt_seconds: 0.5 })).toEqual([])
+  })
+
+  it('headway_sec NaN on platform → 유효한 숫자 오류', () => {
+    const g = okGraph()
+    const p = g.nodes.find((n) => n.type === 'platform')!
+    p.train = { ...p.train!, headway_sec: NaN }
+    const errs = validateConfig(g, defaultConfig())
+    expect(errs.some((e) => e.includes('headway_sec'))).toBe(true)
   })
 })

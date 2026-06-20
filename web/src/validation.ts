@@ -1,8 +1,7 @@
-import type { StationGraphJSON, StationNode } from './types'
+import type { StationGraphJSON, StationNode, SimConfig } from './types'
 
 const TOL = 1e-6
-const SOURCE_TYPES = new Set(['entrance', 'platform'])
-const VALID_GEN_KINDS = new Set(['constant', 'poisson', 'normal_pulse', 'none'])
+const VALID_GEN_KINDS = new Set(['constant', 'poisson', 'batch', 'none'])
 const VALID_ALIGHT_KINDS = new Set(['constant', 'poisson', 'normal'])
 const VALID_TRAIN_MODES = new Set(['both', 'alight', 'board'])
 
@@ -61,32 +60,32 @@ export function validateGraph(graph: StationGraphJSON): string[] {
       errors.push(`노드 ${n.id}: 이동인원이 갈 곳이 없음(출력/exit 없음, 체류확률<1)`)
     }
 
-    if (n.generation && !SOURCE_TYPES.has(n.type)) errors.push(`노드 ${n.id}: 발생은 출입구/승강장만 가능`)
+    // Generation allowed ONLY on entrance nodes
+    if (n.generation && n.generation.kind !== 'none' && n.type !== 'entrance') {
+      errors.push(`노드 ${n.id}: 발생(generation)은 출입구에서만 가능합니다`)
+    }
 
-    // generation kind validation + FIX 4 파라미터 검사
+    // generation kind validation + 파라미터 검사
     if (n.generation) {
       const gen = n.generation
       if (!VALID_GEN_KINDS.has(gen.kind)) {
         errors.push(`노드 ${n.id}: 발생 분포 종류가 올바르지 않음`)
       }
-      // FIX 4a: rate 범위 (constant/poisson)
-      if (gen.kind === 'constant' || gen.kind === 'poisson') {
+      // rate 범위 (constant/poisson/batch)
+      if (gen.kind === 'constant' || gen.kind === 'poisson' || gen.kind === 'batch') {
         const r = gen.rate ?? 0
         if (!isFinite(r) || r < 0) {
           errors.push(`노드 ${n.id}: 발생률(rate)은 0 이상이어야 함`)
         }
       }
-      // FIX 4b: normal_pulse sigma_sec / total
-      if (gen.kind === 'normal_pulse') {
-        const sigma = gen.sigma_sec ?? 0
-        if (sigma <= 0) {
-          errors.push(`노드 ${n.id}: 정규펄스 sigma_sec는 0보다 커야 함`)
-        }
-        if ((gen.total ?? 0) < 0) {
-          errors.push(`노드 ${n.id}: 정규펄스 total(총 발생 인원)은 0 이상이어야 함`)
+      // batch requires batch_size > 0
+      if (gen.kind === 'batch') {
+        const bs = gen.batch_size ?? 0
+        if (!isFinite(bs) || bs <= 0) {
+          errors.push(`노드 ${n.id}: 군집 크기(batch_size)는 0보다 커야 함`)
         }
       }
-      // FIX 4c: profile 형식 검사
+      // profile 형식 검사
       if (gen.profile != null) {
         const validProfile = Array.isArray(gen.profile) && gen.profile.every(
           (entry) => Array.isArray(entry) && entry.length === 2
@@ -110,7 +109,6 @@ export function validateGraph(graph: StationGraphJSON): string[] {
         if (!(n.elevator.speed >= 1)) errors.push(`노드 ${n.id}: 엘리베이터 속력(주기)은 1 이상이어야 함`)
       }
       if (n.train) errors.push(`노드 ${n.id}: 엘리베이터는 열차 설정을 가질 수 없음`)
-      if (n.generation) errors.push(`노드 ${n.id}: 엘리베이터는 발생 설정을 가질 수 없음`)
       // FIX 3: 유출 경로 없으면 방출 인원이 사라짐
       if (outCount[n.id] === 0 && (n.exit_weight ?? 0) === 0) {
         errors.push(`노드 ${n.id}: 엘리베이터는 출력 링크 또는 이탈(exit_weight)이 필요합니다(유출 경로 없음)`)
@@ -174,5 +172,30 @@ export function validateGraph(graph: StationGraphJSON): string[] {
     }
   }
 
+  return errors
+}
+
+// 프로젝트/설정 레벨 검증 (dt, duration, headway vs dt)
+export function validateConfig(graph: StationGraphJSON, config: SimConfig): string[] {
+  const errors: string[] = []
+  if (!Number.isFinite(config.dt_seconds)) {
+    errors.push('dt_seconds는 유효한 숫자여야 합니다')
+  } else if (config.dt_seconds <= 0) {
+    errors.push('dt_seconds는 0보다 커야 합니다')
+  }
+  if (!Number.isFinite(config.duration_seconds)) {
+    errors.push('duration_seconds는 유효한 숫자여야 합니다')
+  } else if (config.duration_seconds <= 0) {
+    errors.push('duration_seconds는 0보다 커야 합니다')
+  }
+  for (const n of graph.nodes) {
+    if (n.type === 'platform' && n.train) {
+      if (!Number.isFinite(n.train.headway_sec)) {
+        errors.push(`노드 ${n.id}: 배차간격(headway_sec)은 유효한 숫자여야 합니다`)
+      } else if (n.train.headway_sec > 0 && n.train.headway_sec < config.dt_seconds) {
+        errors.push(`노드 ${n.id}: 배차간격(headway)이 Δt(dt_seconds)보다 작아 열차가 누락됩니다`)
+      }
+    }
+  }
   return errors
 }

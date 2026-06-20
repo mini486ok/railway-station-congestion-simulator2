@@ -33,4 +33,30 @@ describe('batch', () => {
       expect(rate).toBeLessThanOrEqual(3)
     }
   })
+
+  it('rate variation scales profile entries and sets gen.rate', () => {
+    // entrance with profile; base rate 2.0, profile [[0, 1.0], [60, 4.0]]
+    const p: ProjectConfig = {
+      graph: {
+        nodes: [{
+          ...makeNode('entrance', 'A'),
+          generation: { kind: 'poisson', rate: 2.0, profile: [[0, 1.0], [60, 4.0]] },
+        }],
+        links: [],
+      },
+      config: { ...defaultSimConfig(), seed: 0 },
+    }
+    const spec: BatchSpec = { runs: 1, baseSeed: 0, varyEntranceRate: [1, 3] }
+    const [cfg] = buildRunConfigs(p, spec)
+    const gen = cfg.graph.nodes[0].generation!
+    const r = gen.rate!
+    // rate must be within [1, 3]
+    expect(r).toBeGreaterThanOrEqual(1)
+    expect(r).toBeLessThanOrEqual(3)
+    // profile entries must be scaled by factor = r / 2.0
+    const expectedFactor = r / 2.0
+    const profile = gen.profile!
+    expect(profile[0][1]).toBeCloseTo(1.0 * expectedFactor, 9)
+    expect(profile[1][1]).toBeCloseTo(4.0 * expectedFactor, 9)
+  })
 })

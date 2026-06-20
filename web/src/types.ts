@@ -5,12 +5,10 @@ export type NodeType =
 export interface WeidmannParams { v_free: number; rho_max: number; gamma: number }
 
 export interface GenerationConfig {
-  kind: 'constant' | 'poisson' | 'normal_pulse' | 'none'
+  kind: 'constant' | 'poisson' | 'batch' | 'none'
   rate?: number
   profile?: [number, number][] | null
-  center_sec?: number
-  sigma_sec?: number
-  total?: number
+  batch_size?: number
 }
 
 export interface TrainConfig {

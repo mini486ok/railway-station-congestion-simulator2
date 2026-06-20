@@ -76,16 +76,18 @@ export function GraphEditor({ selectedNodeId, selectedLinkIndex, onSelectNode, o
           </div>
         ))}
       </div>
-      {/* FIX H: empty-state hint overlay when no nodes exist */}
+      {/* Item 1: empty-state hint overlay — stronger copy pointing UP to template select */}
       {nodes.length === 0 && (
         <div style={{
           position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
           justifyContent: 'center', pointerEvents: 'none', textAlign: 'center',
-          color: '#888', fontSize: '0.88em', lineHeight: 1.7, padding: 24,
+          color: '#666', fontSize: '0.9em', lineHeight: 1.9, padding: 24,
         }}>
-          ① 좌측 '노드 추가'에서 노드를 만들고<br />
-          ② 노드 가장자리를 드래그해 연결하세요.<br />
-          또는 상단에서 예제 템플릿을 불러오세요.
+          <div style={{ background: 'rgba(255,255,255,0.88)', borderRadius: 10, padding: '18px 24px', border: '1.5px dashed #aac' }}>
+            <div style={{ fontSize: '1.3em', marginBottom: 6 }}>⬆</div>
+            <strong>① 상단 '예제 템플릿 불러오기'에서 예제를 선택하거나,</strong><br />
+            <strong>② 왼쪽 팔레트에서 노드를 추가하세요.</strong>
+          </div>
         </div>
       )}
     </div>
