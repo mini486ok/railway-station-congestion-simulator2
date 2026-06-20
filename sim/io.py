@@ -83,7 +83,14 @@ def gnn_bundle(graph: StationGraph) -> dict[str, str]:
 
 
 def gnn_bundle_by_group(graph: StationGraph) -> dict[str, str]:
-    """그룹 단위 GNN 번들. group 레이블 = node.group (비어 있으면 node.id), 첫 등장 순서."""
+    """그룹 단위 GNN 번들. group 레이블 = node.group (비어 있으면 node.id), 첫 등장 순서.
+
+    계약(contract):
+    - adjacency: 그룹 간 멤버 노드 경로 가중치(weight)의 SUM (행-정규화 없음; GCN 소비자가 직접 정규화).
+    - distance: 링크 가중치(weight)로 가중평균한 거리. 총 가중치가 0이면 단순 평균으로 폴백; 링크 없으면 0.
+    - travel_time: 링크 가중치(weight)로 가중평균한 이동시간, round()로 정수화. 폴백 동일.
+    - group_features: 그룹별 집계 피처 CSV (아래 헤더 참조).
+    """
     # 그룹 레이블 결정 및 첫-등장 순서 유지
     eff_group = [n.group if n.group else n.id for n in graph.nodes]
     unique_groups: list[str] = []
@@ -99,10 +106,15 @@ def gnn_bundle_by_group(graph: StationGraph) -> dict[str, str]:
 
     # 행렬 초기화
     adj = [[0.0] * ng for _ in range(ng)]
-    dist_sum = [[0.0] * ng for _ in range(ng)]
-    dist_cnt = [[0] * ng for _ in range(ng)]
-    tt_sum = [[0.0] * ng for _ in range(ng)]
-    tt_cnt = [[0] * ng for _ in range(ng)]
+    # 가중 합산을 위한 분자/분모
+    dist_wsum = [[0.0] * ng for _ in range(ng)]   # sum(weight * distance)
+    dist_wt   = [[0.0] * ng for _ in range(ng)]   # sum(weight)
+    dist_sum  = [[0.0] * ng for _ in range(ng)]   # sum(distance) — 폴백용
+    dist_cnt  = [[0]   * ng for _ in range(ng)]
+    tt_wsum   = [[0.0] * ng for _ in range(ng)]   # sum(weight * travel_time)
+    tt_wt     = [[0.0] * ng for _ in range(ng)]   # sum(weight)
+    tt_sum    = [[0.0] * ng for _ in range(ng)]   # sum(travel_time) — 폴백용
+    tt_cnt    = [[0]   * ng for _ in range(ng)]
 
     node_id_map = {n.id: n for n in graph.nodes}
     for lnk in graph.links:
@@ -113,41 +125,80 @@ def gnn_bundle_by_group(graph: StationGraph) -> dict[str, str]:
         gi = node_to_gidx[lnk.source]
         gj = node_to_gidx[lnk.target]
         adj[gi][gj] += lnk.weight
-        dist_sum[gi][gj] += float(lnk.distance)
-        dist_cnt[gi][gj] += 1
-        tt_sum[gi][gj] += float(lnk.travel_time)
-        tt_cnt[gi][gj] += 1
+        dist_wsum[gi][gj] += lnk.weight * float(lnk.distance)
+        dist_wt[gi][gj]   += lnk.weight
+        dist_sum[gi][gj]  += float(lnk.distance)
+        dist_cnt[gi][gj]  += 1
+        tt_wsum[gi][gj] += lnk.weight * float(lnk.travel_time)
+        tt_wt[gi][gj]   += lnk.weight
+        tt_sum[gi][gj]  += float(lnk.travel_time)
+        tt_cnt[gi][gj]  += 1
 
-    # 평균 거리 / 이동시간 행렬
-    dist_avg = [
-        [dist_sum[i][j] / dist_cnt[i][j] if dist_cnt[i][j] > 0 else 0.0 for j in range(ng)]
-        for i in range(ng)
-    ]
-    tt_avg = [
-        [round(tt_sum[i][j] / tt_cnt[i][j]) if tt_cnt[i][j] > 0 else 0 for j in range(ng)]
-        for i in range(ng)
-    ]
+    # 가중평균 거리 / 이동시간 행렬 (총 가중치=0 → 단순 평균 폴백; 링크 없으면 0)
+    dist_avg = []
+    for i in range(ng):
+        row = []
+        for j in range(ng):
+            if dist_cnt[i][j] == 0:
+                row.append(0.0)
+            elif dist_wt[i][j] > 0.0:
+                row.append(dist_wsum[i][j] / dist_wt[i][j])
+            else:
+                row.append(dist_sum[i][j] / dist_cnt[i][j])
+        dist_avg.append(row)
 
-    # 그룹 피처: 노드 수, 총 면적, 타입(첫 등장 순서)
-    group_num_nodes: list[int] = [0] * ng
-    group_total_area: list[float] = [0.0] * ng
-    group_types: list[list[str]] = [[] for _ in range(ng)]  # 첫 등장 순서 유지
+    tt_avg = []
+    for i in range(ng):
+        row = []
+        for j in range(ng):
+            if tt_cnt[i][j] == 0:
+                row.append(0)
+            elif tt_wt[i][j] > 0.0:
+                row.append(round(tt_wsum[i][j] / tt_wt[i][j]))
+            else:
+                row.append(round(tt_sum[i][j] / tt_cnt[i][j]))
+        tt_avg.append(row)
 
-    for i, node in enumerate(graph.nodes):
+    # 그룹 피처: 노드 수, 총 면적, 타입, 확장 피처
+    group_num_nodes:       list[int]   = [0]   * ng
+    group_total_area:      list[float] = [0.0] * ng
+    group_types:           list[list[str]] = [[] for _ in range(ng)]
+    group_has_generation:  list[int]   = [0]   * ng
+    group_has_train:       list[int]   = [0]   * ng
+    group_exit_weight_sum: list[float] = [0.0] * ng
+    group_bsp_sum:         list[float] = [0.0] * ng   # base_stay_prob 합
+    group_rho_max_sum:     list[float] = [0.0] * ng   # weidmann.rho_max 합
+
+    for node in graph.nodes:
         gi = node_to_gidx[node.id]
         group_num_nodes[gi] += 1
         group_total_area[gi] += float(node.area)
         tv = node.type.value
         if tv not in group_types[gi]:
             group_types[gi].append(tv)
+        if node.generation is not None and node.generation.kind != "none":
+            group_has_generation[gi] = 1
+        if node.train is not None:
+            group_has_train[gi] = 1
+        group_exit_weight_sum[gi] += float(node.exit_weight)
+        group_bsp_sum[gi]         += float(node.base_stay_prob)
+        group_rho_max_sum[gi]     += float(node.weidmann.rho_max)
 
-    feat_rows = ["group,num_nodes,total_area,types"]
+    feat_rows = ["group,num_nodes,total_area,types,has_generation,has_train,exit_weight_sum,avg_base_stay_prob,avg_rho_max"]
     for gi, g in enumerate(unique_groups):
+        nn = group_num_nodes[gi]
+        avg_bsp     = group_bsp_sum[gi]     / nn if nn > 0 else 0.0
+        avg_rho_max = group_rho_max_sum[gi] / nn if nn > 0 else 0.0
         feat_rows.append(",".join([
             _csv_field(g),
-            str(group_num_nodes[gi]),
+            str(nn),
             str(group_total_area[gi]),
             _csv_field(";".join(group_types[gi])),
+            str(group_has_generation[gi]),
+            str(group_has_train[gi]),
+            str(group_exit_weight_sum[gi]),
+            str(avg_bsp),
+            str(avg_rho_max),
         ]))
 
     return {

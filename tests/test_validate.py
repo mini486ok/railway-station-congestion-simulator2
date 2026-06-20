@@ -37,7 +37,7 @@ def test_platform_generation_now_invalid():
     g = _ok_graph()
     g.nodes[1].generation = GenerationConfig(kind="constant", rate=1.0)
     errs = g.validate()
-    assert any("발생(generation)은 출입구에서만 가능합니다" in e for e in errs)
+    assert any("발생(generation)은 출입구" in e for e in errs)
 
 
 def test_platform_requires_train():

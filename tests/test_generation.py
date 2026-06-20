@@ -44,16 +44,20 @@ def test_batch_deterministic():
     assert g.amount(0, 5.0, np.random.default_rng(0), False) == 50.0
 
 
-def test_batch_stochastic_nonneg_multiple():
-    """batch 확률론: 반환값은 batch_size의 비음수 배수(정수 배치 수 * batch_size)."""
+def test_batch_stochastic_nonneg_and_mean():
+    """batch 확률론(진짜 Compound Poisson): 반환값은 비음수 정수이며 대표본 평균은 rate*dt*batch_size에 수렴."""
     cfg = GenerationConfig(kind="batch", rate=2.0, batch_size=3.0)
     g = build_generator(cfg)
     rng = np.random.default_rng(7)
-    for _ in range(50):
-        val = g.amount(0, 5.0, rng, True)
-        assert val >= 0.0
-        # val = num_batches(정수) * 3.0 → 3.0의 배수인지 확인
-        assert abs(val % 3.0) < 1e-9 or val == 0.0
+    samples = [g.amount(0, 5.0, rng, True) for _ in range(3000)]
+    # 비음수
+    assert all(v >= 0.0 for v in samples)
+    # 정수값 (각 배치 크기도 Poisson 표본이므로 합도 정수)
+    assert all(float(v).is_integer() for v in samples)
+    # 평균 ≈ rate*dt*batch_size = 2.0*5.0*3.0 = 30.0
+    assert abs(np.mean(samples) - 30.0) < 1.5
+    # 분산이 존재해야 함 (단순 고정 batch_size 모델보다 분산 크거나 같음)
+    assert np.var(samples) > 0.0
 
 
 def test_train_arrival_steps_periodic():

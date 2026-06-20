@@ -195,8 +195,10 @@ class StationGraph:
                     errors.append(
                         f"노드 {n.id}: 이동인원이 갈 곳이 없음(출력/exit 없음, 체류확률<1)")
 
-            if n.generation is not None and n.type != NodeType.ENTRANCE:
-                errors.append(f"노드 {n.id}: 발생(generation)은 출입구에서만 가능합니다")
+            if (n.generation is not None
+                    and n.generation.kind != "none"
+                    and n.type != NodeType.ENTRANCE):
+                errors.append(f"노드 {n.id}: 발생(generation)은 출입구(entrance)에서만 가능합니다")
             if n.type == NodeType.PLATFORM and n.train is None:
                 errors.append(f"노드 {n.id}: 승강장은 열차 설정(train)이 필요")
             if n.type != NodeType.PLATFORM and n.train is not None:
@@ -213,7 +215,7 @@ class StationGraph:
                         errors.append(f"노드 {n.id}: elevator speed는 1 이상이어야 함")
                 if n.train is not None:
                     errors.append(f"노드 {n.id}: 엘리베이터 노드에는 열차 설정(train)이 불가")
-                if n.generation is not None:
+                if n.generation is not None and n.generation.kind != "none":
                     errors.append(f"노드 {n.id}: 엘리베이터 노드에는 발생 설정(generation)이 불가")
                 # FIX 3: 유출 경로 없으면 방출 인원이 사라짐(mass loss)
                 if out_count[n.id] == 0 and n.exit_weight == 0:

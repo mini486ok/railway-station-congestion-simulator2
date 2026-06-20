@@ -71,17 +71,18 @@ def test_batch_generator_deterministic_with_profile():
     assert g.amount(6, 10.0, np.random.default_rng(0), False) == pytest.approx(100.0)
 
 
-def test_batch_generator_stochastic_nonneg_multiple_of_batch_size():
-    """batch 확률론: 반환값은 batch_size의 비음수 정수 배수여야 한다."""
+def test_batch_generator_stochastic_nonneg_integer_and_variance():
+    """batch 확률론(진짜 Compound Poisson): 비음수 정수 반환, 평균≈rate*dt*batch_size, 분산>0."""
     batch_size = 7.0
     cfg = GenerationConfig(kind="batch", rate=2.0, batch_size=batch_size)
     g = build_generator(cfg)
     rng = np.random.default_rng(42)
-    for _ in range(100):
-        val = g.amount(0, 5.0, rng, True)
-        assert val >= 0.0
-        if val > 0:
-            assert abs(round(val / batch_size) - val / batch_size) < 1e-9
+    samples = [g.amount(0, 5.0, rng, True) for _ in range(3000)]
+    assert all(v >= 0.0 for v in samples)
+    assert all(float(v).is_integer() for v in samples)
+    expected_mean = 2.0 * 5.0 * batch_size  # = 70.0
+    assert abs(np.mean(samples) - expected_mean) < 3.0
+    assert np.var(samples) > 0.0
 
 
 def test_batch_generator_stochastic_mean_approx():
@@ -92,6 +93,24 @@ def test_batch_generator_stochastic_mean_approx():
     samples = [g.amount(0, 5.0, rng, True) for _ in range(5000)]
     expected_mean = 2.0 * 5.0 * 3.0  # = 30.0
     assert abs(np.mean(samples) - expected_mean) < 1.5
+
+
+def test_batch_generator_stochastic_variance_exceeds_poisson_batch_count_only():
+    """진짜 Compound Poisson: 분산이 배치 수만 확률론인 모델(고정 크기)보다 커야 한다.
+    이론: Var(CP) = lam*(mu_S^2 + sigma_S^2) > lam*mu_S^2 = Var(고정크기 모델).
+    여기서 S~Poisson(batch_size) → sigma_S^2 = batch_size."""
+    rate, dt, batch_size = 2.0, 5.0, 5.0
+    cfg = GenerationConfig(kind="batch", rate=rate, batch_size=batch_size)
+    g = build_generator(cfg)
+    rng = np.random.default_rng(777)
+    samples = [g.amount(0, dt, rng, True) for _ in range(10000)]
+    lam = rate * dt  # = 10.0
+    # 이론 분산(CP) = lam*(batch_size + batch_size^2) = lam*batch_size*(1+batch_size)
+    var_fixed_size = lam * batch_size ** 2   # 고정 크기 모델 분산
+    var_sample = float(np.var(samples))
+    # 표본 분산이 고정 크기 모델 분산보다 커야 함
+    assert var_sample > var_fixed_size * 0.9, \
+        f"분산 {var_sample:.1f} < 고정크기모델 분산 {var_fixed_size:.1f}"
 
 
 def test_build_generator_returns_batch_generator_for_batch_kind():
@@ -111,29 +130,39 @@ def test_entrance_with_generation_ok():
              base_stay_prob=0.5, exit_weight=0.5,
              generation=GenerationConfig(kind="constant", rate=1.0))
     errs = StationGraph(nodes=[n], links=[]).validate()
-    gen_errs = [e for e in errs if "발생(generation)은 출입구에서만 가능합니다" in e]
+    gen_errs = [e for e in errs if "발생(generation)은 출입구" in e]
     assert gen_errs == [], f"출입구는 generation 허용: {gen_errs}"
 
 
 def test_platform_with_generation_raises_error():
-    """승강장(PLATFORM) 노드에 generation을 붙이면 '발생(generation)은 출입구에서만 가능합니다' 오류."""
+    """승강장(PLATFORM) 노드에 generation(kind!=none)을 붙이면 출입구 전용 오류가 나야 한다."""
     n = Node(id="P", name="승강장", type=NodeType.PLATFORM, area=200,
              base_stay_prob=1.0, exit_weight=1.0,
              generation=GenerationConfig(kind="constant", rate=1.0),
              train=TrainConfig(first_arrival_sec=60, headway_sec=300))
     errs = StationGraph(nodes=[n], links=[]).validate()
-    assert any("발생(generation)은 출입구에서만 가능합니다" in e and "P" in e for e in errs), \
+    assert any("발생(generation)은 출입구" in e and "P" in e for e in errs), \
         f"예상 오류 없음: {errs}"
 
 
 def test_passage_with_generation_raises_error():
-    """통로(PASSAGE) 노드에 generation을 붙이면 오류가 나야 한다."""
+    """통로(PASSAGE) 노드에 generation(kind!=none)을 붙이면 오류가 나야 한다."""
     n = Node(id="C", name="통로", type=NodeType.PASSAGE, area=10,
              base_stay_prob=1.0, exit_weight=0.0,
              generation=GenerationConfig(kind="constant", rate=1.0))
     errs = StationGraph(nodes=[n], links=[]).validate()
-    assert any("발생(generation)은 출입구에서만 가능합니다" in e and "C" in e for e in errs), \
+    assert any("발생(generation)은 출입구" in e and "C" in e for e in errs), \
         f"예상 오류 없음: {errs}"
+
+
+def test_passage_with_generation_none_kind_ok():
+    """통로(PASSAGE) 노드에 generation(kind='none')을 붙여도 오류가 없어야 한다(web 패리티)."""
+    n = Node(id="C", name="통로", type=NodeType.PASSAGE, area=10,
+             base_stay_prob=1.0, exit_weight=0.0,
+             generation=GenerationConfig(kind="none"))
+    errs = StationGraph(nodes=[n], links=[]).validate()
+    gen_errs = [e for e in errs if "발생(generation)은 출입구" in e]
+    assert gen_errs == [], f"kind='none'은 허용되어야 함: {gen_errs}"
 
 
 def test_validate_batch_batch_size_zero_raises_error():
@@ -210,29 +239,31 @@ def test_gnn_bundle_by_group_adjacency_weight_sum():
     assert float(parts2[2]) == pytest.approx(0.0)  # G2→G2
 
 
-def test_gnn_bundle_by_group_distance_average():
-    """그룹 행렬: G1→G2 distance = (30+20)/2 = 25.0."""
+def test_gnn_bundle_by_group_distance_weighted_average():
+    """그룹 행렬: G1→G2 distance = 링크 가중치 가중평균.
+    A→C(w=0.6, d=30) + B→C(w=0.4, d=20) → (0.6*30+0.4*20)/(0.6+0.4) = 26.0."""
     bundle = gnn_bundle_by_group(_two_group_graph())
     lines = bundle["distance"].strip().splitlines()
     g1_row = lines[1].split(",")
     g1_to_g2 = float(g1_row[2])
-    assert g1_to_g2 == pytest.approx(25.0)
+    assert g1_to_g2 == pytest.approx(26.0)
 
 
-def test_gnn_bundle_by_group_travel_time_average():
-    """그룹 행렬: G1→G2 travel_time = round((3+2)/2) = round(2.5) = 2."""
+def test_gnn_bundle_by_group_travel_time_weighted_average():
+    """그룹 행렬: G1→G2 travel_time = 링크 가중치 가중평균 round.
+    A→C(w=0.6, tt=3) + B→C(w=0.4, tt=2) → round((0.6*3+0.4*2)/1.0) = round(2.6) = 3."""
     bundle = gnn_bundle_by_group(_two_group_graph())
     lines = bundle["travel_time"].strip().splitlines()
     g1_row = lines[1].split(",")
     g1_to_g2 = int(g1_row[2])
-    assert g1_to_g2 == round((3 + 2) / 2)
+    assert g1_to_g2 == 3
 
 
 def test_gnn_bundle_by_group_features_header():
-    """group_features CSV 헤더가 'group,num_nodes,total_area,types'이어야 한다."""
+    """group_features CSV 헤더가 확장된 컬럼을 포함해야 한다."""
     bundle = gnn_bundle_by_group(_two_group_graph())
     lines = bundle["group_features"].strip().splitlines()
-    assert lines[0] == "group,num_nodes,total_area,types"
+    assert lines[0] == "group,num_nodes,total_area,types,has_generation,has_train,exit_weight_sum,avg_base_stay_prob,avg_rho_max"
 
 
 def test_gnn_bundle_by_group_features_g1():
@@ -323,3 +354,71 @@ def test_webapi_export_gnn_group():
     result = webapi.export_gnn_group()
     data = json.loads(result)
     assert set(data.keys()) == {"adjacency", "distance", "travel_time", "group_features"}
+
+
+# ─────────────────────────────────────────────
+# FIX 4 추가: 링크 가중치 가중평균 검증 (병렬 링크)
+# ─────────────────────────────────────────────
+
+def test_gnn_bundle_by_group_distance_weighted_parallel_links():
+    """두 그룹 사이에 가중치 다른 병렬 링크가 있으면 distance는 가중평균이어야 한다.
+    G1→G2: link1(w=0.8, d=100), link2(w=0.2, d=50) → (0.8*100+0.2*50)/(0.8+0.2) = 90.0.
+    단순 평균이었다면 (100+50)/2 = 75.0으로 달라야 함."""
+    nodes = [
+        Node(id="A", name="A", type=NodeType.ENTRANCE, area=10.0,
+             base_stay_prob=0.5, group="G1"),
+        Node(id="B", name="B", type=NodeType.PASSAGE, area=10.0,
+             base_stay_prob=0.5, group="G1"),
+        Node(id="C", name="C", type=NodeType.PASSAGE, area=10.0,
+             base_stay_prob=1.0, group="G2"),
+    ]
+    links = [
+        Link(source="A", target="C", distance=100.0, weight=0.8, travel_time=10),
+        Link(source="B", target="C", distance=50.0,  weight=0.2, travel_time=5),
+    ]
+    g = StationGraph(nodes=nodes, links=links)
+    bundle = gnn_bundle_by_group(g)
+    lines = bundle["distance"].strip().splitlines()
+    # header: ,G1,G2 ; G1 row is index 1
+    g1_row = lines[1].split(",")
+    g1_to_g2 = float(g1_row[2])
+    expected_weighted = (0.8 * 100.0 + 0.2 * 50.0) / (0.8 + 0.2)  # = 90.0
+    assert g1_to_g2 == pytest.approx(expected_weighted)
+    assert g1_to_g2 != pytest.approx(75.0)  # 단순 평균이 아님을 확인
+
+
+def test_gnn_bundle_by_group_features_has_generation_and_train():
+    """group_features의 has_generation/has_train 컬럼이 올바르게 집계되어야 한다."""
+    nodes = [
+        Node(id="E", name="입구", type=NodeType.ENTRANCE, area=50.0,
+             base_stay_prob=0.5, group="GA",
+             generation=GenerationConfig(kind="constant", rate=1.0)),
+        Node(id="P", name="승강장", type=NodeType.PLATFORM, area=100.0,
+             base_stay_prob=1.0, exit_weight=1.0, group="GB",
+             train=TrainConfig(first_arrival_sec=60, headway_sec=300)),
+    ]
+    g = StationGraph(nodes=nodes, links=[])
+    bundle = gnn_bundle_by_group(g)
+    lines = bundle["group_features"].strip().splitlines()
+    # GA 행: has_generation=1, has_train=0
+    ga_parts = lines[1].split(",")
+    assert ga_parts[0] == "GA"
+    assert ga_parts[4] == "1"   # has_generation
+    assert ga_parts[5] == "0"   # has_train
+    # GB 행: has_generation=0, has_train=1
+    gb_parts = lines[2].split(",")
+    assert gb_parts[0] == "GB"
+    assert gb_parts[4] == "0"   # has_generation
+    assert gb_parts[5] == "1"   # has_train
+
+
+def test_gnn_bundle_by_group_features_none_generation_not_counted():
+    """generation.kind='none'인 노드는 has_generation=0으로 집계되어야 한다."""
+    n = Node(id="C", name="통로", type=NodeType.PASSAGE, area=10.0,
+             base_stay_prob=1.0, group="GX",
+             generation=GenerationConfig(kind="none"))
+    g = StationGraph(nodes=[n], links=[])
+    bundle = gnn_bundle_by_group(g)
+    lines = bundle["group_features"].strip().splitlines()
+    parts = lines[1].split(",")
+    assert parts[4] == "0"  # has_generation=0 (kind='none'은 제외)
