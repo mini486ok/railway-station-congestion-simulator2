@@ -86,49 +86,52 @@ function finalizeWeights(nodes: StationNode[], links: RawLink[]): StationLink[] 
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Template 1 — 기본 역 (입구-게이트-승강장)
+// 소형 역 기준. 상대식 승강장(1면) → 분할 노드 각 300㎡(물리 600㎡).
+// T1: 배차 300s, 정원 200명 → 통과 0.667/s. 입구 유입 0.5/s(≈0.75×) — 여유 있음.
 // ──────────────────────────────────────────────────────────────────────────────
 function basicStation(): ProjectConfig {
   const E_in = makeNode('entrance', 'E_in')
-  E_in.name = '1번 입구'; E_in.area = 30; E_in.base_stay_prob = 0.2
+  E_in.name = '1번 입구'; E_in.area = 15; E_in.base_stay_prob = 0.2
   E_in.exit_weight = 0; E_in.group = '출입구1'
-  // T1: P_board throughput = 150/300 = 0.5/s. Target inflow ≈ 1.2× = 0.6/s.
-  E_in.generation = { kind: 'poisson', rate: 0.6 }
+  // T1: throughput=200/300≈0.667/s → 유입 0.5/s (0.75×) — 여유
+  E_in.generation = { kind: 'poisson', rate: 0.5 }
 
   const E_out = makeNode('entrance', 'E_out')
-  E_out.name = '1번 출구'; E_out.area = 30; E_out.base_stay_prob = 0.2
+  E_out.name = '1번 출구'; E_out.area = 15; E_out.base_stay_prob = 0.2
   E_out.exit_weight = 1.0; E_out.group = '출입구1'
   E_out.generation = null
 
   const G_in = makeNode('gate', 'G_in')
-  G_in.name = '게이트(승강장방향)'; G_in.area = 10; G_in.base_stay_prob = 0.3
+  G_in.name = '게이트(승강장방향)'; G_in.area = 20; G_in.base_stay_prob = 0.3
   G_in.exit_weight = 0; G_in.group = '게이트1'
 
   const G_out = makeNode('gate', 'G_out')
-  G_out.name = '게이트(출구방향)'; G_out.area = 10; G_out.base_stay_prob = 0.3
+  G_out.name = '게이트(출구방향)'; G_out.area = 20; G_out.base_stay_prob = 0.3
   G_out.exit_weight = 0; G_out.group = '게이트1'
 
+  // 상대식 승강장(물리 600㎡) → 분할 노드 각 300㎡
   const P_board = makeNode('platform', 'P_board')
-  P_board.name = '승강장(승차)'; P_board.area = 100; P_board.base_stay_prob = 1.0
+  P_board.name = '승강장(승차)'; P_board.area = 300; P_board.base_stay_prob = 1.0
   P_board.exit_weight = 0; P_board.group = '승강장1'
   P_board.train = {
-    first_arrival_sec: 60, headway_sec: 300, jitter_sigma_sec: 5,
-    capacity: 150, alight_kind: 'constant', alight_mean: 0, alight_std: 0,
+    first_arrival_sec: 90, headway_sec: 300, jitter_sigma_sec: 8,
+    capacity: 200, alight_kind: 'constant', alight_mean: 0, alight_std: 0,
     mode: 'board',
   }
 
   const P_alight = makeNode('platform', 'P_alight')
-  P_alight.name = '승강장(하차)'; P_alight.area = 100; P_alight.base_stay_prob = 0.15
+  P_alight.name = '승강장(하차)'; P_alight.area = 300; P_alight.base_stay_prob = 0.15
   P_alight.exit_weight = 0; P_alight.group = '승강장1'
   P_alight.train = {
-    first_arrival_sec: 60, headway_sec: 300, jitter_sigma_sec: 5,
-    capacity: 0, alight_kind: 'poisson', alight_mean: 80, alight_std: 0,
+    first_arrival_sec: 90, headway_sec: 300, jitter_sigma_sec: 8,
+    capacity: 0, alight_kind: 'poisson', alight_mean: 60, alight_std: 0,
     mode: 'alight',
   }
 
-  const l1 = makeLink('E_in', 'G_in'); l1.distance = 30; l1.weight = 1.0
-  const l2 = makeLink('G_in', 'P_board'); l2.distance = 40; l2.weight = 1.0
-  const l3 = makeLink('P_alight', 'G_out'); l3.distance = 40; l3.weight = 1.0
-  const l4 = makeLink('G_out', 'E_out'); l4.distance = 30; l4.weight = 1.0
+  const l1 = makeLink('E_in', 'G_in'); l1.distance = 20; l1.weight = 1.0
+  const l2 = makeLink('G_in', 'P_board'); l2.distance = 25; l2.weight = 1.0
+  const l3 = makeLink('P_alight', 'G_out'); l3.distance = 25; l3.weight = 1.0
+  const l4 = makeLink('G_out', 'E_out'); l4.distance = 20; l4.weight = 1.0
 
   return {
     graph: { nodes: [E_in, E_out, G_in, G_out, P_board, P_alight], links: [l1, l2, l3, l4] },
@@ -138,65 +141,69 @@ function basicStation(): ProjectConfig {
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Template 2 — 엘리베이터 포함 역
+// 소형 역 + 엘리베이터. 승강장 상대식(물리 600㎡) → 분할 각 300㎡.
+// T2: 배차 300s, 정원 200 → 통과 0.667/s. 입구 0.5/s (0.75×) — 여유.
+// 엘리베이터: 15인승 ca 약 50s 주기(speed=10)
 // ──────────────────────────────────────────────────────────────────────────────
 function elevatorStation(): ProjectConfig {
   const E_in = makeNode('entrance', 'E_in')
-  E_in.name = '1번 입구'; E_in.area = 30; E_in.base_stay_prob = 0.2
+  E_in.name = '1번 입구'; E_in.area = 15; E_in.base_stay_prob = 0.2
   E_in.exit_weight = 0; E_in.group = '출입구1'
-  // T2: P_board throughput = 150/300 = 0.5/s. Target ≈ 1.2× = 0.6/s.
-  E_in.generation = { kind: 'poisson', rate: 0.6 }
+  // T2: throughput=200/300≈0.667/s → 유입 0.5/s (0.75×)
+  E_in.generation = { kind: 'poisson', rate: 0.5 }
 
   const E_out = makeNode('entrance', 'E_out')
-  E_out.name = '1번 출구'; E_out.area = 30; E_out.base_stay_prob = 0.2
+  E_out.name = '1번 출구'; E_out.area = 15; E_out.base_stay_prob = 0.2
   E_out.exit_weight = 1.0; E_out.group = '출입구1'
   E_out.generation = null
 
   const G_in = makeNode('gate', 'G_in')
-  G_in.name = '게이트(승강장방향)'; G_in.area = 10; G_in.base_stay_prob = 0.3
+  G_in.name = '게이트(승강장방향)'; G_in.area = 20; G_in.base_stay_prob = 0.3
   G_in.exit_weight = 0; G_in.group = '게이트1'
 
   const G_out = makeNode('gate', 'G_out')
-  G_out.name = '게이트(출구방향)'; G_out.area = 10; G_out.base_stay_prob = 0.3
+  G_out.name = '게이트(출구방향)'; G_out.area = 20; G_out.base_stay_prob = 0.3
   G_out.exit_weight = 0; G_out.group = '게이트1'
 
-  // 엘리베이터: base_stay_prob=1.0 은 elevator 타입이므로 sink-trap 규칙 미적용
+  // 엘리베이터: 15인승, 약 50s 주기(speed=10 slots), 카+대기 공간 12㎡ (분할 적용 없음, 단일 기기)
   const EL_up = makeNode('elevator', 'EL_up')
-  EL_up.name = '엘리베이터(승강장방향)'; EL_up.area = 5; EL_up.base_stay_prob = 1.0
+  EL_up.name = '엘리베이터(승강장방향)'; EL_up.area = 12; EL_up.base_stay_prob = 1.0
   EL_up.exit_weight = 0; EL_up.group = '엘리베이터1'
-  EL_up.elevator = { capacity: 10, speed: 8 }
+  EL_up.elevator = { capacity: 15, speed: 10 }
 
   const EL_dn = makeNode('elevator', 'EL_dn')
-  EL_dn.name = '엘리베이터(출구방향)'; EL_dn.area = 5; EL_dn.base_stay_prob = 1.0
+  EL_dn.name = '엘리베이터(출구방향)'; EL_dn.area = 12; EL_dn.base_stay_prob = 1.0
   EL_dn.exit_weight = 0; EL_dn.group = '엘리베이터1'
-  EL_dn.elevator = { capacity: 10, speed: 8 }
+  EL_dn.elevator = { capacity: 15, speed: 10 }
 
+  // 상대식 승강장(물리 600㎡) → 분할 노드 각 300㎡
   const P_board = makeNode('platform', 'P_board')
-  P_board.name = '승강장(승차)'; P_board.area = 100; P_board.base_stay_prob = 1.0
+  P_board.name = '승강장(승차)'; P_board.area = 300; P_board.base_stay_prob = 1.0
   P_board.exit_weight = 0; P_board.group = '승강장1'
   P_board.train = {
-    first_arrival_sec: 60, headway_sec: 300, jitter_sigma_sec: 5,
-    capacity: 150, alight_kind: 'constant', alight_mean: 0, alight_std: 0,
+    first_arrival_sec: 90, headway_sec: 300, jitter_sigma_sec: 8,
+    capacity: 200, alight_kind: 'constant', alight_mean: 0, alight_std: 0,
     mode: 'board',
   }
 
   const P_alight = makeNode('platform', 'P_alight')
-  P_alight.name = '승강장(하차)'; P_alight.area = 100; P_alight.base_stay_prob = 0.15
+  P_alight.name = '승강장(하차)'; P_alight.area = 300; P_alight.base_stay_prob = 0.15
   P_alight.exit_weight = 0; P_alight.group = '승강장1'
   P_alight.train = {
-    first_arrival_sec: 60, headway_sec: 300, jitter_sigma_sec: 5,
-    capacity: 0, alight_kind: 'poisson', alight_mean: 80, alight_std: 0,
+    first_arrival_sec: 90, headway_sec: 300, jitter_sigma_sec: 8,
+    capacity: 0, alight_kind: 'poisson', alight_mean: 60, alight_std: 0,
     mode: 'alight',
   }
 
-  // Elevator mode share ≈10% (accessibility use), stairs/direct path 90%.
-  const l1 = makeLink('E_in', 'G_in'); l1.distance = 30; l1.weight = 1.0
-  const l2 = makeLink('G_in', 'P_board'); l2.distance = 40; l2.weight = 0.9
-  const l3 = makeLink('G_in', 'EL_up'); l3.distance = 15; l3.weight = 0.1
-  const l4 = makeLink('EL_up', 'P_board'); l4.distance = 15; l4.weight = 1.0
-  const l5 = makeLink('P_alight', 'G_out'); l5.distance = 40; l5.weight = 0.9
-  const l6 = makeLink('P_alight', 'EL_dn'); l6.distance = 15; l6.weight = 0.1
-  const l7 = makeLink('EL_dn', 'G_out'); l7.distance = 15; l7.weight = 1.0
-  const l8 = makeLink('G_out', 'E_out'); l8.distance = 30; l8.weight = 1.0
+  // 엘리베이터 이용률 ≈ 10% (교통약자), 직행 90%.
+  const l1 = makeLink('E_in', 'G_in'); l1.distance = 20; l1.weight = 1.0
+  const l2 = makeLink('G_in', 'P_board'); l2.distance = 25; l2.weight = 0.9
+  const l3 = makeLink('G_in', 'EL_up'); l3.distance = 12; l3.weight = 0.1
+  const l4 = makeLink('EL_up', 'P_board'); l4.distance = 12; l4.weight = 1.0
+  const l5 = makeLink('P_alight', 'G_out'); l5.distance = 25; l5.weight = 0.9
+  const l6 = makeLink('P_alight', 'EL_dn'); l6.distance = 12; l6.weight = 0.1
+  const l7 = makeLink('EL_dn', 'G_out'); l7.distance = 12; l7.weight = 1.0
+  const l8 = makeLink('G_out', 'E_out'); l8.distance = 20; l8.weight = 1.0
 
   return {
     graph: {
@@ -212,67 +219,67 @@ function elevatorStation(): ProjectConfig {
 // ──────────────────────────────────────────────────────────────────────────────
 function transferStation(): ProjectConfig {
   const E_in = makeNode('entrance', 'E_in')
-  E_in.name = '1번 입구'; E_in.area = 30; E_in.base_stay_prob = 0.2
+  E_in.name = '1번 입구'; E_in.area = 18; E_in.base_stay_prob = 0.2
   E_in.exit_weight = 0; E_in.group = '출입구1'
-  // T3: P1_board=150/300=0.5/s, P2_board=180/240=0.75/s, total=1.25/s.
-  // 60:40 split → P1 receives 0.6/s (1.2× cap), P2 receives 0.4/s (0.53× cap). Aggregate 1.0 < 1.25.
-  E_in.generation = { kind: 'poisson', rate: 1.0 }
+  // T3: P1=250/300≈0.833/s, P2=280/240≈1.167/s, 합계≈2.0/s.
+  // 입구 유입 0.9/s (합계의 45%) → 여유 있음 (환승 승객이 추가 유입).
+  E_in.generation = { kind: 'poisson', rate: 0.9 }
 
   const E_out = makeNode('entrance', 'E_out')
-  E_out.name = '1번 출구'; E_out.area = 30; E_out.base_stay_prob = 0.2
+  E_out.name = '1번 출구'; E_out.area = 18; E_out.base_stay_prob = 0.2
   E_out.exit_weight = 1.0; E_out.group = '출입구1'
   E_out.generation = null
 
-  // 콘코스 (진입/퇴장)
+  // 콘코스 (진입/퇴장) — 중형 환승역: 물리 500㎡ → 분할 250㎡ 각
   const C_in = makeNode('passage', 'C_in')
-  C_in.name = '콘코스(진입)'; C_in.area = 100; C_in.base_stay_prob = 0.1
+  C_in.name = '콘코스(진입)'; C_in.area = 250; C_in.base_stay_prob = 0.1
   C_in.exit_weight = 0; C_in.group = '콘코스1'
 
   const C_out = makeNode('passage', 'C_out')
-  C_out.name = '콘코스(퇴장)'; C_out.area = 100; C_out.base_stay_prob = 0.1
+  C_out.name = '콘코스(퇴장)'; C_out.area = 250; C_out.base_stay_prob = 0.1
   C_out.exit_weight = 0; C_out.group = '콘코스1'
 
-  // 1호선 승강장
+  // 1호선 승강장 — 상대식(물리 700㎡) → 분할 350㎡ 각
   const P1_board = makeNode('platform', 'P1_board')
-  P1_board.name = '1호선 승강장(승차)'; P1_board.area = 100; P1_board.base_stay_prob = 1.0
+  P1_board.name = '1호선 승강장(승차)'; P1_board.area = 350; P1_board.base_stay_prob = 1.0
   P1_board.exit_weight = 0; P1_board.group = '승강장1'
   P1_board.train = {
-    first_arrival_sec: 60, headway_sec: 300, jitter_sigma_sec: 5,
-    capacity: 150, alight_kind: 'constant', alight_mean: 0, alight_std: 0,
+    first_arrival_sec: 90, headway_sec: 300, jitter_sigma_sec: 8,
+    capacity: 250, alight_kind: 'constant', alight_mean: 0, alight_std: 0,
     mode: 'board',
   }
 
   const P1_alight = makeNode('platform', 'P1_alight')
-  P1_alight.name = '1호선 승강장(하차)'; P1_alight.area = 100; P1_alight.base_stay_prob = 0.15
+  P1_alight.name = '1호선 승강장(하차)'; P1_alight.area = 350; P1_alight.base_stay_prob = 0.15
   P1_alight.exit_weight = 0; P1_alight.group = '승강장1'
   // alight_kind='normal': normal-distributed alight variation is active only in stochastic mode;
   // in deterministic mode alight_mean is used exactly.
   P1_alight.train = {
-    first_arrival_sec: 60, headway_sec: 300, jitter_sigma_sec: 5,
-    capacity: 0, alight_kind: 'normal', alight_mean: 60, alight_std: 15,
+    first_arrival_sec: 90, headway_sec: 300, jitter_sigma_sec: 8,
+    capacity: 0, alight_kind: 'normal', alight_mean: 80, alight_std: 15,
     mode: 'alight',
   }
 
-  // 2호선 승강장
+  // 2호선 승강장 — 상대식(물리 750㎡) → 분할 375㎡ 각
   const P2_board = makeNode('platform', 'P2_board')
-  P2_board.name = '2호선 승강장(승차)'; P2_board.area = 100; P2_board.base_stay_prob = 1.0
+  P2_board.name = '2호선 승강장(승차)'; P2_board.area = 375; P2_board.base_stay_prob = 1.0
   P2_board.exit_weight = 0; P2_board.group = '승강장2'
   P2_board.train = {
-    first_arrival_sec: 90, headway_sec: 240, jitter_sigma_sec: 5,
-    capacity: 180, alight_kind: 'constant', alight_mean: 0, alight_std: 0,
+    first_arrival_sec: 120, headway_sec: 240, jitter_sigma_sec: 8,
+    capacity: 280, alight_kind: 'constant', alight_mean: 0, alight_std: 0,
     mode: 'board',
   }
 
   const P2_alight = makeNode('platform', 'P2_alight')
-  P2_alight.name = '2호선 승강장(하차)'; P2_alight.area = 100; P2_alight.base_stay_prob = 0.15
+  P2_alight.name = '2호선 승강장(하차)'; P2_alight.area = 375; P2_alight.base_stay_prob = 0.15
   P2_alight.exit_weight = 0; P2_alight.group = '승강장2'
   P2_alight.train = {
-    first_arrival_sec: 90, headway_sec: 240, jitter_sigma_sec: 5,
-    capacity: 0, alight_kind: 'poisson', alight_mean: 70, alight_std: 0,
+    first_arrival_sec: 120, headway_sec: 240, jitter_sigma_sec: 8,
+    capacity: 0, alight_kind: 'poisson', alight_mean: 90, alight_std: 0,
     mode: 'alight',
   }
 
-  // 유료구역내 환승통로 (1→2, 2→1)
+  // 유료구역내 환승통로 (1→2, 2→1) — 각 단방향 통로: 물리 80㎡ (분할 없음, 단방향 각 40㎡)
   const TR12 = makeNode('passage', 'TR12')
   TR12.name = '환승통로(1호선→2호선)'; TR12.area = 40; TR12.base_stay_prob = 0.05
   TR12.exit_weight = 0; TR12.group = '환승통로'
@@ -284,25 +291,25 @@ function transferStation(): ProjectConfig {
   const nodes = [E_in, E_out, C_in, C_out, P1_board, P1_alight, P2_board, P2_alight, TR12, TR21]
   const links: RawLink[] = [
     // 진입 경로
-    lnk('E_in', 'C_in', 30, 1),
+    lnk('E_in', 'C_in', 20, 1),
     // 콘코스 → 1호선 or 2호선 (60:40)
-    lnk('C_in', 'P1_board', 40, 3),
-    lnk('C_in', 'P2_board', 50, 2),
+    lnk('C_in', 'P1_board', 30, 3),
+    lnk('C_in', 'P2_board', 40, 2),
 
     // 1호선 하차 → 출구(70%) + 2호선 환승(30%)
-    lnk('P1_alight', 'C_out', 40, 7),
-    lnk('P1_alight', 'TR12', 30, 3),
+    lnk('P1_alight', 'C_out', 30, 7),
+    lnk('P1_alight', 'TR12', 70, 3),
 
     // 2호선 하차 → 출구(70%) + 1호선 환승(30%)
-    lnk('P2_alight', 'C_out', 40, 7),
-    lnk('P2_alight', 'TR21', 30, 3),
+    lnk('P2_alight', 'C_out', 30, 7),
+    lnk('P2_alight', 'TR21', 70, 3),
 
     // 환승통로 연결
-    lnk('TR12', 'P2_board', 40, 1),
-    lnk('TR21', 'P1_board', 40, 1),
+    lnk('TR12', 'P2_board', 70, 1),
+    lnk('TR21', 'P1_board', 70, 1),
 
     // 출구 경로
-    lnk('C_out', 'E_out', 30, 1),
+    lnk('C_out', 'E_out', 20, 1),
   ]
 
   return {
@@ -316,58 +323,59 @@ function transferStation(): ProjectConfig {
 // ──────────────────────────────────────────────────────────────────────────────
 function multiEntranceStation(): ProjectConfig {
   const E1_in = makeNode('entrance', 'E1_in')
-  E1_in.name = '1번 입구'; E1_in.area = 30; E1_in.base_stay_prob = 0.2
+  E1_in.name = '1번 입구'; E1_in.area = 15; E1_in.base_stay_prob = 0.2
   E1_in.exit_weight = 0; E1_in.group = '출입구1'
-  // T4: P_board throughput=150/300=0.5/s. Total target≈1.2×=0.6/s. E1:E2 ≈ 55:45 asymmetry kept.
-  E1_in.generation = { kind: 'poisson', rate: 0.33 }
+  // T4: throughput=200/300≈0.667/s. 입구 총 0.55/s (≈0.82×) — 여유. E1:E2 ≈ 55:45.
+  E1_in.generation = { kind: 'poisson', rate: 0.30 }
 
   const E1_out = makeNode('entrance', 'E1_out')
-  E1_out.name = '1번 출구'; E1_out.area = 30; E1_out.base_stay_prob = 0.2
+  E1_out.name = '1번 출구'; E1_out.area = 15; E1_out.base_stay_prob = 0.2
   E1_out.exit_weight = 1.0; E1_out.group = '출입구1'
   E1_out.generation = null
 
   const E2_in = makeNode('entrance', 'E2_in')
-  E2_in.name = '2번 입구'; E2_in.area = 30; E2_in.base_stay_prob = 0.2
+  E2_in.name = '2번 입구'; E2_in.area = 15; E2_in.base_stay_prob = 0.2
   E2_in.exit_weight = 0; E2_in.group = '출입구2'
-  E2_in.generation = { kind: 'poisson', rate: 0.27 }
+  E2_in.generation = { kind: 'poisson', rate: 0.25 }
 
   const E2_out = makeNode('entrance', 'E2_out')
-  E2_out.name = '2번 출구'; E2_out.area = 30; E2_out.base_stay_prob = 0.2
+  E2_out.name = '2번 출구'; E2_out.area = 15; E2_out.base_stay_prob = 0.2
   E2_out.exit_weight = 1.0; E2_out.group = '출입구2'
   E2_out.generation = null
 
   const G_in = makeNode('gate', 'G_in')
-  G_in.name = '게이트(승강장방향)'; G_in.area = 10; G_in.base_stay_prob = 0.3
+  G_in.name = '게이트(승강장방향)'; G_in.area = 20; G_in.base_stay_prob = 0.3
   G_in.exit_weight = 0; G_in.group = '게이트1'
 
   const G_out = makeNode('gate', 'G_out')
-  G_out.name = '게이트(출구방향)'; G_out.area = 10; G_out.base_stay_prob = 0.3
+  G_out.name = '게이트(출구방향)'; G_out.area = 20; G_out.base_stay_prob = 0.3
   G_out.exit_weight = 0; G_out.group = '게이트1'
 
+  // 상대식 승강장(물리 600㎡) → 분할 300㎡ 각
   const P_board = makeNode('platform', 'P_board')
-  P_board.name = '승강장(승차)'; P_board.area = 100; P_board.base_stay_prob = 1.0
+  P_board.name = '승강장(승차)'; P_board.area = 300; P_board.base_stay_prob = 1.0
   P_board.exit_weight = 0; P_board.group = '승강장1'
   P_board.train = {
-    first_arrival_sec: 60, headway_sec: 300, jitter_sigma_sec: 5,
-    capacity: 150, alight_kind: 'constant', alight_mean: 0, alight_std: 0,
+    first_arrival_sec: 90, headway_sec: 300, jitter_sigma_sec: 8,
+    capacity: 200, alight_kind: 'constant', alight_mean: 0, alight_std: 0,
     mode: 'board',
   }
 
   const P_alight = makeNode('platform', 'P_alight')
-  P_alight.name = '승강장(하차)'; P_alight.area = 100; P_alight.base_stay_prob = 0.15
+  P_alight.name = '승강장(하차)'; P_alight.area = 300; P_alight.base_stay_prob = 0.15
   P_alight.exit_weight = 0; P_alight.group = '승강장1'
   P_alight.train = {
-    first_arrival_sec: 60, headway_sec: 300, jitter_sigma_sec: 5,
-    capacity: 0, alight_kind: 'poisson', alight_mean: 80, alight_std: 0,
+    first_arrival_sec: 90, headway_sec: 300, jitter_sigma_sec: 8,
+    capacity: 0, alight_kind: 'poisson', alight_mean: 60, alight_std: 0,
     mode: 'alight',
   }
 
-  const l1 = makeLink('E1_in', 'G_in'); l1.distance = 30; l1.weight = 1.0
-  const l2 = makeLink('E2_in', 'G_in'); l2.distance = 35; l2.weight = 1.0
-  const l3 = makeLink('G_in', 'P_board'); l3.distance = 40; l3.weight = 1.0
-  const l4 = makeLink('P_alight', 'G_out'); l4.distance = 40; l4.weight = 1.0
-  const l5 = makeLink('G_out', 'E1_out'); l5.distance = 30; l5.weight = 0.5
-  const l6 = makeLink('G_out', 'E2_out'); l6.distance = 35; l6.weight = 0.5
+  const l1 = makeLink('E1_in', 'G_in'); l1.distance = 25; l1.weight = 1.0
+  const l2 = makeLink('E2_in', 'G_in'); l2.distance = 30; l2.weight = 1.0
+  const l3 = makeLink('G_in', 'P_board'); l3.distance = 25; l3.weight = 1.0
+  const l4 = makeLink('P_alight', 'G_out'); l4.distance = 25; l4.weight = 1.0
+  const l5 = makeLink('G_out', 'E1_out'); l5.distance = 25; l5.weight = 0.5
+  const l6 = makeLink('G_out', 'E2_out'); l6.distance = 30; l6.weight = 0.5
 
   return {
     graph: {
@@ -384,36 +392,36 @@ function multiEntranceStation(): ProjectConfig {
 // ──────────────────────────────────────────────────────────────────────────────
 function mediumStation(): ProjectConfig {
   // ─ 출입구 ─────────────────────────────────────────────────────────────────
-  // T5: pb throughput=300/360≈0.83/s. Target inflow≈1.0/s (1.2×). Asymmetry e1i:e2i kept at 3:2.
-  const e1i = mk('entrance', 'e1i', '1번 입구', '출입구1', { area: 30, base_stay_prob: 0.2, exit_weight: 0, generation: { kind: 'poisson', rate: 0.6 } })
-  const e1o = mk('entrance', 'e1o', '1번 출구', '출입구1', { area: 30, base_stay_prob: 0.2, exit_weight: 1.0, generation: null })
-  const e2i = mk('entrance', 'e2i', '2번 입구', '출입구2', { area: 30, base_stay_prob: 0.2, exit_weight: 0, generation: { kind: 'poisson', rate: 0.4 } })
-  const e2o = mk('entrance', 'e2o', '2번 출구', '출입구2', { area: 30, base_stay_prob: 0.2, exit_weight: 1.0, generation: null })
+  // T5: pb throughput=350/360≈0.972/s. 입구 유입≈0.75/s(0.77×). e1i:e2i ≈ 3:2.
+  const e1i = mk('entrance', 'e1i', '1번 입구', '출입구1', { area: 18, base_stay_prob: 0.2, exit_weight: 0, generation: { kind: 'poisson', rate: 0.45 } })
+  const e1o = mk('entrance', 'e1o', '1번 출구', '출입구1', { area: 18, base_stay_prob: 0.2, exit_weight: 1.0, generation: null })
+  const e2i = mk('entrance', 'e2i', '2번 입구', '출입구2', { area: 18, base_stay_prob: 0.2, exit_weight: 0, generation: { kind: 'poisson', rate: 0.30 } })
+  const e2o = mk('entrance', 'e2o', '2번 출구', '출입구2', { area: 18, base_stay_prob: 0.2, exit_weight: 1.0, generation: null })
 
-  // ─ 대합실(콘코스) — 한 쌍이 물리 공간 하나를 나눔 → 각 100㎡ ──────────────
-  const ci = mk('passage', 'ci', '대합실(진입)', '대합실1', { area: 100, base_stay_prob: 0.1, exit_weight: 0 })
-  const co = mk('passage', 'co', '대합실(퇴장)', '대합실1', { area: 100, base_stay_prob: 0.1, exit_weight: 0 })
+  // ─ 대합실(콘코스) — 중형: 물리 500㎡ → 분할 각 250㎡ ──────────────────────
+  const ci = mk('passage', 'ci', '대합실(진입)', '대합실1', { area: 250, base_stay_prob: 0.1, exit_weight: 0 })
+  const co = mk('passage', 'co', '대합실(퇴장)', '대합실1', { area: 250, base_stay_prob: 0.1, exit_weight: 0 })
 
-  // ─ 게이트 — 각 10㎡ ──────────────────────────────────────────────────────
-  const gi = mk('gate', 'gi', '게이트(승강장방향)', '게이트1', { area: 10, base_stay_prob: 0.3, exit_weight: 0 })
-  const go_ = mk('gate', 'go_', '게이트(출구방향)', '게이트1', { area: 10, base_stay_prob: 0.3, exit_weight: 0 })
+  // ─ 게이트 — 소형 개찰구: 물리 60㎡ → 분할 각 30㎡ ──────────────────────────
+  const gi = mk('gate', 'gi', '게이트(승강장방향)', '게이트1', { area: 30, base_stay_prob: 0.3, exit_weight: 0 })
+  const go_ = mk('gate', 'go_', '게이트(출구방향)', '게이트1', { area: 30, base_stay_prob: 0.3, exit_weight: 0 })
 
-  // ─ 계단 (대합실↔승강장) — 각 12㎡ ────────────────────────────────────────
-  const stDn = mk('stairs', 'stDn', '계단(하행)', '계단1', { area: 12, base_stay_prob: 0.2, exit_weight: 0 })
-  const stUp = mk('stairs', 'stUp', '계단(상행)', '계단1', { area: 12, base_stay_prob: 0.2, exit_weight: 0 })
+  // ─ 계단 (대합실↔승강장) — 폭 2m 계단: 물리 40㎡ → 분할 각 20㎡ ────────────
+  const stDn = mk('stairs', 'stDn', '계단(하행)', '계단1', { area: 20, base_stay_prob: 0.2, exit_weight: 0 })
+  const stUp = mk('stairs', 'stUp', '계단(상행)', '계단1', { area: 20, base_stay_prob: 0.2, exit_weight: 0 })
 
-  // ─ 에스컬레이터 — base_stay_prob=0.0 (탑승즉시 이동) 각 8㎡ ──────────────
+  // ─ 에스컬레이터 — 탑승즉시 이동, 폭 1m 단기: 물리 16㎡ → 분할 각 8㎡ ────────
   const esDn = mk('escalator', 'esDn', '에스컬레이터(하행)', '에스컬레이터1', { area: 8, base_stay_prob: 0.0, exit_weight: 0 })
   const esUp = mk('escalator', 'esUp', '에스컬레이터(상행)', '에스컬레이터1', { area: 8, base_stay_prob: 0.0, exit_weight: 0 })
 
-  // ─ 승강장 (섬식, 1면) — 각 150㎡ ──────────────────────────────────────────
+  // ─ 승강장 (섬식 1면, 물리 1400㎡) → 분할 각 700㎡ ─────────────────────────
   const pb = mk('platform', 'pb', '승강장(승차)', '승강장1', {
-    area: 150, base_stay_prob: 1.0, exit_weight: 0,
-    train: { first_arrival_sec: 120, headway_sec: 360, jitter_sigma_sec: 10, capacity: 300, alight_kind: 'constant', alight_mean: 0, alight_std: 0, mode: 'board' },
+    area: 700, base_stay_prob: 1.0, exit_weight: 0,
+    train: { first_arrival_sec: 120, headway_sec: 360, jitter_sigma_sec: 10, capacity: 350, alight_kind: 'constant', alight_mean: 0, alight_std: 0, mode: 'board' },
   })
   const pa = mk('platform', 'pa', '승강장(하차)', '승강장1', {
-    area: 150, base_stay_prob: 0.15, exit_weight: 0,
-    train: { first_arrival_sec: 120, headway_sec: 360, jitter_sigma_sec: 10, capacity: 0, alight_kind: 'poisson', alight_mean: 120, alight_std: 0, mode: 'alight' },
+    area: 700, base_stay_prob: 0.15, exit_weight: 0,
+    train: { first_arrival_sec: 120, headway_sec: 360, jitter_sigma_sec: 10, capacity: 0, alight_kind: 'poisson', alight_mean: 110, alight_std: 0, mode: 'alight' },
   })
 
   const nodes = [e1i, e1o, e2i, e2o, ci, co, gi, go_, stDn, stUp, esDn, esUp, pb, pa]
@@ -421,27 +429,27 @@ function mediumStation(): ProjectConfig {
   // ─ 링크 — 에스컬레이터 선호(3), 계단(1) 분담 ─────────────────────────────
   const links: RawLink[] = [
     // 진입: 입구 → 대합실
-    lnk('e1i', 'ci', 30, 1),
-    lnk('e2i', 'ci', 35, 1),
+    lnk('e1i', 'ci', 25, 1),
+    lnk('e2i', 'ci', 30, 1),
     // 대합실 → 게이트
-    lnk('ci', 'gi', 25, 1),
+    lnk('ci', 'gi', 20, 1),
     // 게이트 → 계단(1) / 에스컬레이터(3) 분담
-    lnk('gi', 'stDn', 20, 1),
-    lnk('gi', 'esDn', 15, 3),
+    lnk('gi', 'stDn', 15, 1),
+    lnk('gi', 'esDn', 12, 3),
     // 계단/에스컬레이터 → 승강장(승차)
-    lnk('stDn', 'pb', 20, 1),
-    lnk('esDn', 'pb', 15, 1),
+    lnk('stDn', 'pb', 18, 1),
+    lnk('esDn', 'pb', 14, 1),
     // 퇴장: 승강장(하차) → 계단(1) / 에스컬레이터(3)(상행)
-    lnk('pa', 'stUp', 20, 1),
-    lnk('pa', 'esUp', 15, 3),
+    lnk('pa', 'stUp', 18, 1),
+    lnk('pa', 'esUp', 14, 3),
     // 계단/에스컬레이터(상행) → 게이트(출구방향)
-    lnk('stUp', 'go_', 20, 1),
-    lnk('esUp', 'go_', 15, 1),
+    lnk('stUp', 'go_', 15, 1),
+    lnk('esUp', 'go_', 12, 1),
     // 게이트(출구방향) → 대합실(퇴장)
-    lnk('go_', 'co', 25, 1),
+    lnk('go_', 'co', 20, 1),
     // 대합실(퇴장) → 출구
-    lnk('co', 'e1o', 30, 1),
-    lnk('co', 'e2o', 35, 1),
+    lnk('co', 'e1o', 25, 1),
+    lnk('co', 'e2o', 30, 1),
   ]
 
   return {
@@ -455,69 +463,69 @@ function mediumStation(): ProjectConfig {
 // [escalator fix + mode share escalator:3/stairs:1/elevator:0.4 + area halving + 포화완화]
 // ──────────────────────────────────────────────────────────────────────────────
 function largeTransferStation(): ProjectConfig {
-  // ─ 지상 출입구 3개 — 총 유입 ≈ (2.0+1.5+1.2)=4.7/s
-  // A선 통과 throughput ≈ 300/300=1/s, B선 300/240≈1.25/s  →  합 ≈2.25/s
-  // 0.8× = 1.8/s → 입구 합계를 조정. 단순히 rate 낮춤.
-  const e1i = mk('entrance', 'lt_e1i', '1번 입구', 'lt_출입구1', { area: 30, base_stay_prob: 0.2, exit_weight: 0, generation: { kind: 'poisson', rate: 0.7 } })
-  const e1o = mk('entrance', 'lt_e1o', '1번 출구', 'lt_출입구1', { area: 30, base_stay_prob: 0.2, exit_weight: 1.0, generation: null })
-  const e2i = mk('entrance', 'lt_e2i', '2번 입구', 'lt_출입구2', { area: 30, base_stay_prob: 0.2, exit_weight: 0, generation: { kind: 'poisson', rate: 0.6 } })
-  const e2o = mk('entrance', 'lt_e2o', '2번 출구', 'lt_출입구2', { area: 30, base_stay_prob: 0.2, exit_weight: 1.0, generation: null })
-  const e3i = mk('entrance', 'lt_e3i', '3번 입구', 'lt_출입구3', { area: 30, base_stay_prob: 0.2, exit_weight: 0, generation: { kind: 'poisson', rate: 0.5 } })
-  const e3o = mk('entrance', 'lt_e3o', '3번 출구', 'lt_출입구3', { area: 30, base_stay_prob: 0.2, exit_weight: 1.0, generation: null })
+  // ─ 지상 출입구 3개 — 대형 역(3출입구): 입구 각 20㎡(물리 분할)
+  // A선 통과 throughput ≈ 400/300≈1.33/s, B선 380/240≈1.58/s → 합 ≈2.91/s
+  // 입구 유입 합계 1.8/s (≈0.62×) — 환승객 포함 여유 있음.
+  const e1i = mk('entrance', 'lt_e1i', '1번 입구', 'lt_출입구1', { area: 20, base_stay_prob: 0.2, exit_weight: 0, generation: { kind: 'poisson', rate: 0.70 } })
+  const e1o = mk('entrance', 'lt_e1o', '1번 출구', 'lt_출입구1', { area: 20, base_stay_prob: 0.2, exit_weight: 1.0, generation: null })
+  const e2i = mk('entrance', 'lt_e2i', '2번 입구', 'lt_출입구2', { area: 20, base_stay_prob: 0.2, exit_weight: 0, generation: { kind: 'poisson', rate: 0.60 } })
+  const e2o = mk('entrance', 'lt_e2o', '2번 출구', 'lt_출입구2', { area: 20, base_stay_prob: 0.2, exit_weight: 1.0, generation: null })
+  const e3i = mk('entrance', 'lt_e3i', '3번 입구', 'lt_출입구3', { area: 20, base_stay_prob: 0.2, exit_weight: 0, generation: { kind: 'poisson', rate: 0.50 } })
+  const e3o = mk('entrance', 'lt_e3o', '3번 출구', 'lt_출입구3', { area: 20, base_stay_prob: 0.2, exit_weight: 1.0, generation: null })
 
-  // ─ 중앙 대합실 — 각 100㎡ ─────────────────────────────────────────────────
-  const conci = mk('passage', 'lt_conci', '중앙 대합실(진입)', 'lt_대합실', { area: 100, base_stay_prob: 0.05, exit_weight: 0 })
-  const conco = mk('passage', 'lt_conco', '중앙 대합실(퇴장)', 'lt_대합실', { area: 100, base_stay_prob: 0.05, exit_weight: 0 })
+  // ─ 중앙 대합실 — 대형: 물리 1200㎡ → 분할 각 600㎡ ─────────────────────────
+  const conci = mk('passage', 'lt_conci', '중앙 대합실(진입)', 'lt_대합실', { area: 600, base_stay_prob: 0.05, exit_weight: 0 })
+  const conco = mk('passage', 'lt_conco', '중앙 대합실(퇴장)', 'lt_대합실', { area: 600, base_stay_prob: 0.05, exit_weight: 0 })
 
-  // ─ A선(1호선) 게이트 — 각 10㎡ ─────────────────────────────────────────────
-  const gaIn = mk('gate', 'lt_gaIn', 'A선 게이트(승강장방향)', 'lt_게이트A', { area: 10, base_stay_prob: 0.3, exit_weight: 0 })
-  const gaOut = mk('gate', 'lt_gaOut', 'A선 게이트(출구방향)', 'lt_게이트A', { area: 10, base_stay_prob: 0.3, exit_weight: 0 })
+  // ─ A선(1호선) 게이트 — 대형 개찰: 물리 100㎡ → 분할 각 50㎡ ─────────────────
+  const gaIn = mk('gate', 'lt_gaIn', 'A선 게이트(승강장방향)', 'lt_게이트A', { area: 50, base_stay_prob: 0.3, exit_weight: 0 })
+  const gaOut = mk('gate', 'lt_gaOut', 'A선 게이트(출구방향)', 'lt_게이트A', { area: 50, base_stay_prob: 0.3, exit_weight: 0 })
 
-  // ─ B선(2호선) 게이트 — 각 10㎡ ─────────────────────────────────────────────
-  const gbIn = mk('gate', 'lt_gbIn', 'B선 게이트(승강장방향)', 'lt_게이트B', { area: 10, base_stay_prob: 0.3, exit_weight: 0 })
-  const gbOut = mk('gate', 'lt_gbOut', 'B선 게이트(출구방향)', 'lt_게이트B', { area: 10, base_stay_prob: 0.3, exit_weight: 0 })
+  // ─ B선(2호선) 게이트 — 각 50㎡ ─────────────────────────────────────────────
+  const gbIn = mk('gate', 'lt_gbIn', 'B선 게이트(승강장방향)', 'lt_게이트B', { area: 50, base_stay_prob: 0.3, exit_weight: 0 })
+  const gbOut = mk('gate', 'lt_gbOut', 'B선 게이트(출구방향)', 'lt_게이트B', { area: 50, base_stay_prob: 0.3, exit_weight: 0 })
 
-  // ─ A선 계단/에스컬레이터/엘리베이터 — 각 12/8/5㎡ ───────────────────────
-  const astDn = mk('stairs', 'lt_astDn', 'A선 계단(하행)', 'lt_계단A', { area: 12, base_stay_prob: 0.2, exit_weight: 0 })
-  const astUp = mk('stairs', 'lt_astUp', 'A선 계단(상행)', 'lt_계단A', { area: 12, base_stay_prob: 0.2, exit_weight: 0 })
+  // ─ A선 계단/에스컬레이터/엘리베이터 — 각 25/14/12㎡ ───────────────────────
+  const astDn = mk('stairs', 'lt_astDn', 'A선 계단(하행)', 'lt_계단A', { area: 25, base_stay_prob: 0.2, exit_weight: 0 })
+  const astUp = mk('stairs', 'lt_astUp', 'A선 계단(상행)', 'lt_계단A', { area: 25, base_stay_prob: 0.2, exit_weight: 0 })
   // base_stay_prob=0.0: 에스컬레이터는 sink-trap 없음 + 강제 이동
-  const aesDn = mk('escalator', 'lt_aesDn', 'A선 에스컬레이터(하행)', 'lt_에스컬A', { area: 8, base_stay_prob: 0.0, exit_weight: 0 })
-  const aesUp = mk('escalator', 'lt_aesUp', 'A선 에스컬레이터(상행)', 'lt_에스컬A', { area: 8, base_stay_prob: 0.0, exit_weight: 0 })
-  // 엘리베이터: speed=8 (≈40s 사이클)
-  const aelv = mk('elevator', 'lt_aelv', 'A선 엘리베이터(하행)', 'lt_엘리베A_하행', { area: 5, base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 12, speed: 8 } })
-  const aelvU = mk('elevator', 'lt_aelvU', 'A선 엘리베이터(상행)', 'lt_엘리베A_상행', { area: 5, base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 12, speed: 8 } })
+  const aesDn = mk('escalator', 'lt_aesDn', 'A선 에스컬레이터(하행)', 'lt_에스컬A', { area: 14, base_stay_prob: 0.0, exit_weight: 0 })
+  const aesUp = mk('escalator', 'lt_aesUp', 'A선 에스컬레이터(상행)', 'lt_에스컬A', { area: 14, base_stay_prob: 0.0, exit_weight: 0 })
+  // 엘리베이터: 15인승, speed=10 (≈50s 주기)
+  const aelv = mk('elevator', 'lt_aelv', 'A선 엘리베이터(하행)', 'lt_엘리베A_하행', { area: 12, base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 15, speed: 10 } })
+  const aelvU = mk('elevator', 'lt_aelvU', 'A선 엘리베이터(상행)', 'lt_엘리베A_상행', { area: 12, base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 15, speed: 10 } })
 
-  // ─ A선 승강장 — 각 150㎡ ─────────────────────────────────────────────────
+  // ─ A선 승강장 — 상대식(물리 1000㎡) → 분할 각 500㎡ ─────────────────────────
   const apb = mk('platform', 'lt_apb', 'A선 승강장(승차)', 'lt_승강장A', {
-    area: 150, base_stay_prob: 1.0, exit_weight: 0,
-    train: { first_arrival_sec: 60, headway_sec: 300, jitter_sigma_sec: 8, capacity: 300, alight_kind: 'constant', alight_mean: 0, alight_std: 0, mode: 'board' },
+    area: 500, base_stay_prob: 1.0, exit_weight: 0,
+    train: { first_arrival_sec: 90, headway_sec: 300, jitter_sigma_sec: 8, capacity: 400, alight_kind: 'constant', alight_mean: 0, alight_std: 0, mode: 'board' },
   })
   const apa = mk('platform', 'lt_apa', 'A선 승강장(하차)', 'lt_승강장A', {
-    area: 150, base_stay_prob: 0.15, exit_weight: 0,
-    train: { first_arrival_sec: 60, headway_sec: 300, jitter_sigma_sec: 8, capacity: 0, alight_kind: 'poisson', alight_mean: 80, alight_std: 0, mode: 'alight' },
+    area: 500, base_stay_prob: 0.15, exit_weight: 0,
+    train: { first_arrival_sec: 90, headway_sec: 300, jitter_sigma_sec: 8, capacity: 0, alight_kind: 'poisson', alight_mean: 130, alight_std: 0, mode: 'alight' },
   })
 
-  // ─ B선 계단/에스컬레이터/엘리베이터 ─────────────────────────────────────
-  const bstDn = mk('stairs', 'lt_bstDn', 'B선 계단(하행)', 'lt_계단B', { area: 12, base_stay_prob: 0.2, exit_weight: 0 })
-  const bstUp = mk('stairs', 'lt_bstUp', 'B선 계단(상행)', 'lt_계단B', { area: 12, base_stay_prob: 0.2, exit_weight: 0 })
-  const besDn = mk('escalator', 'lt_besDn', 'B선 에스컬레이터(하행)', 'lt_에스컬B', { area: 8, base_stay_prob: 0.0, exit_weight: 0 })
-  const besUp = mk('escalator', 'lt_besUp', 'B선 에스컬레이터(상행)', 'lt_에스컬B', { area: 8, base_stay_prob: 0.0, exit_weight: 0 })
-  const belv = mk('elevator', 'lt_belv', 'B선 엘리베이터(하행)', 'lt_엘리베B_하행', { area: 5, base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 12, speed: 8 } })
-  const belvU = mk('elevator', 'lt_belvU', 'B선 엘리베이터(상행)', 'lt_엘리베B_상행', { area: 5, base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 12, speed: 8 } })
+  // ─ B선 계단/에스컬레이터/엘리베이터 — 각 25/14/12㎡ ─────────────────────
+  const bstDn = mk('stairs', 'lt_bstDn', 'B선 계단(하행)', 'lt_계단B', { area: 25, base_stay_prob: 0.2, exit_weight: 0 })
+  const bstUp = mk('stairs', 'lt_bstUp', 'B선 계단(상행)', 'lt_계단B', { area: 25, base_stay_prob: 0.2, exit_weight: 0 })
+  const besDn = mk('escalator', 'lt_besDn', 'B선 에스컬레이터(하행)', 'lt_에스컬B', { area: 14, base_stay_prob: 0.0, exit_weight: 0 })
+  const besUp = mk('escalator', 'lt_besUp', 'B선 에스컬레이터(상행)', 'lt_에스컬B', { area: 14, base_stay_prob: 0.0, exit_weight: 0 })
+  const belv = mk('elevator', 'lt_belv', 'B선 엘리베이터(하행)', 'lt_엘리베B_하행', { area: 12, base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 15, speed: 10 } })
+  const belvU = mk('elevator', 'lt_belvU', 'B선 엘리베이터(상행)', 'lt_엘리베B_상행', { area: 12, base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 15, speed: 10 } })
 
-  // ─ B선 승강장 — 각 150㎡ ─────────────────────────────────────────────────
+  // ─ B선 승강장 — 상대식(물리 960㎡) → 분할 각 480㎡ ─────────────────────────
   const bpb = mk('platform', 'lt_bpb', 'B선 승강장(승차)', 'lt_승강장B', {
-    area: 150, base_stay_prob: 1.0, exit_weight: 0,
-    train: { first_arrival_sec: 90, headway_sec: 240, jitter_sigma_sec: 8, capacity: 280, alight_kind: 'constant', alight_mean: 0, alight_std: 0, mode: 'board' },
+    area: 480, base_stay_prob: 1.0, exit_weight: 0,
+    train: { first_arrival_sec: 120, headway_sec: 240, jitter_sigma_sec: 8, capacity: 380, alight_kind: 'constant', alight_mean: 0, alight_std: 0, mode: 'board' },
   })
   const bpa = mk('platform', 'lt_bpa', 'B선 승강장(하차)', 'lt_승강장B', {
-    area: 150, base_stay_prob: 0.15, exit_weight: 0,
-    train: { first_arrival_sec: 90, headway_sec: 240, jitter_sigma_sec: 8, capacity: 0, alight_kind: 'poisson', alight_mean: 80, alight_std: 0, mode: 'alight' },
+    area: 480, base_stay_prob: 0.15, exit_weight: 0,
+    train: { first_arrival_sec: 120, headway_sec: 240, jitter_sigma_sec: 8, capacity: 0, alight_kind: 'poisson', alight_mean: 120, alight_std: 0, mode: 'alight' },
   })
 
-  // ─ 환승 통로 (A↔B 사이) ──────────────────────────────────────────────────
-  const trAB = mk('passage', 'lt_trAB', '환승 통로(A→B)', 'lt_환승통로', { area: 40, base_stay_prob: 0.1, exit_weight: 0 })
-  const trBA = mk('passage', 'lt_trBA', '환승 통로(B→A)', 'lt_환승통로', { area: 40, base_stay_prob: 0.1, exit_weight: 0 })
+  // ─ 환승 통로 (A↔B 사이) — 단방향 각 80㎡ ──────────────────────────────────
+  const trAB = mk('passage', 'lt_trAB', '환승 통로(A→B)', 'lt_환승통로', { area: 80, base_stay_prob: 0.1, exit_weight: 0 })
+  const trBA = mk('passage', 'lt_trBA', '환승 통로(B→A)', 'lt_환승통로', { area: 80, base_stay_prob: 0.1, exit_weight: 0 })
 
   const nodes = [
     e1i, e1o, e2i, e2o, e3i, e3o,
@@ -611,44 +619,44 @@ function largeTransferStation(): ProjectConfig {
 // ──────────────────────────────────────────────────────────────────────────────
 function multiLevelStation(): ProjectConfig {
   // ─ 지상 출입구 ─────────────────────────────────────────────────────────
-  // throughput ≈ 250/300 ≈ 0.83/s → 0.8× = 0.67/s target inflow
-  const si1 = mk('entrance', 'ml_si1', '지상 1번 입구', 'ml_지상출입구1', { area: 30, base_stay_prob: 0.2, exit_weight: 0, generation: { kind: 'poisson', rate: 0.45 } })
-  const so1 = mk('entrance', 'ml_so1', '지상 1번 출구', 'ml_지상출입구1', { area: 30, base_stay_prob: 0.2, exit_weight: 1.0, generation: null })
-  const si2 = mk('entrance', 'ml_si2', '지상 2번 입구', 'ml_지상출입구2', { area: 30, base_stay_prob: 0.2, exit_weight: 0, generation: { kind: 'poisson', rate: 0.25 } })
-  const so2 = mk('entrance', 'ml_so2', '지상 2번 출구', 'ml_지상출입구2', { area: 30, base_stay_prob: 0.2, exit_weight: 1.0, generation: null })
+  // T7: throughput=320/300≈1.07/s → 유입 0.75/s(0.7×). 계단·에스컬·엘리베 3중 경로.
+  const si1 = mk('entrance', 'ml_si1', '지상 1번 입구', 'ml_지상출입구1', { area: 18, base_stay_prob: 0.2, exit_weight: 0, generation: { kind: 'poisson', rate: 0.48 } })
+  const so1 = mk('entrance', 'ml_so1', '지상 1번 출구', 'ml_지상출입구1', { area: 18, base_stay_prob: 0.2, exit_weight: 1.0, generation: null })
+  const si2 = mk('entrance', 'ml_si2', '지상 2번 입구', 'ml_지상출입구2', { area: 18, base_stay_prob: 0.2, exit_weight: 0, generation: { kind: 'poisson', rate: 0.27 } })
+  const so2 = mk('entrance', 'ml_so2', '지상 2번 출구', 'ml_지상출입구2', { area: 18, base_stay_prob: 0.2, exit_weight: 1.0, generation: null })
 
-  // ─ B1↔지상 수직 이동 — 각 12/8/5㎡ ─────────────────────────────────────
-  const stB1Dn = mk('stairs', 'ml_stB1Dn', 'B1 계단(하행)', 'ml_계단B1', { area: 12, base_stay_prob: 0.2, exit_weight: 0 })
-  const stB1Up = mk('stairs', 'ml_stB1Up', 'B1 계단(상행)', 'ml_계단B1', { area: 12, base_stay_prob: 0.2, exit_weight: 0 })
+  // ─ B1↔지상 수직 이동 — 계단 25/에스컬 8/엘리베 12㎡ ────────────────────────
+  const stB1Dn = mk('stairs', 'ml_stB1Dn', 'B1 계단(하행)', 'ml_계단B1', { area: 25, base_stay_prob: 0.2, exit_weight: 0 })
+  const stB1Up = mk('stairs', 'ml_stB1Up', 'B1 계단(상행)', 'ml_계단B1', { area: 25, base_stay_prob: 0.2, exit_weight: 0 })
   const esB1Dn = mk('escalator', 'ml_esB1Dn', 'B1 에스컬레이터(하행)', 'ml_에스컬B1', { area: 8, base_stay_prob: 0.0, exit_weight: 0 })
   const esB1Up = mk('escalator', 'ml_esB1Up', 'B1 에스컬레이터(상행)', 'ml_에스컬B1', { area: 8, base_stay_prob: 0.0, exit_weight: 0 })
-  const elvB1Dn = mk('elevator', 'ml_elvB1Dn', 'B1 엘리베이터(하행)', 'ml_엘리베B1_하행', { area: 5, base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 10, speed: 8 } })
-  const elvB1Up = mk('elevator', 'ml_elvB1Up', 'B1 엘리베이터(상행)', 'ml_엘리베B1_상행', { area: 5, base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 10, speed: 8 } })
+  const elvB1Dn = mk('elevator', 'ml_elvB1Dn', 'B1 엘리베이터(하행)', 'ml_엘리베B1_하행', { area: 12, base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 13, speed: 10 } })
+  const elvB1Up = mk('elevator', 'ml_elvB1Up', 'B1 엘리베이터(상행)', 'ml_엘리베B1_상행', { area: 12, base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 13, speed: 10 } })
 
-  // ─ B1 대합실 — 각 100㎡ ─────────────────────────────────────────────────
-  const b1ci = mk('passage', 'ml_b1ci', 'B1 대합실(진입)', 'ml_B1대합실', { area: 100, base_stay_prob: 0.1, exit_weight: 0 })
-  const b1co = mk('passage', 'ml_b1co', 'B1 대합실(퇴장)', 'ml_B1대합실', { area: 100, base_stay_prob: 0.1, exit_weight: 0 })
+  // ─ B1 대합실 — 중형: 물리 600㎡ → 분할 각 300㎡ ────────────────────────────
+  const b1ci = mk('passage', 'ml_b1ci', 'B1 대합실(진입)', 'ml_B1대합실', { area: 300, base_stay_prob: 0.1, exit_weight: 0 })
+  const b1co = mk('passage', 'ml_b1co', 'B1 대합실(퇴장)', 'ml_B1대합실', { area: 300, base_stay_prob: 0.1, exit_weight: 0 })
 
-  // ─ 게이트 — 각 10㎡ ────────────────────────────────────────────────────
-  const gIn = mk('gate', 'ml_gIn', '게이트(B2방향)', 'ml_게이트', { area: 10, base_stay_prob: 0.3, exit_weight: 0 })
-  const gOut = mk('gate', 'ml_gOut', '게이트(B1방향)', 'ml_게이트', { area: 10, base_stay_prob: 0.3, exit_weight: 0 })
+  // ─ 게이트 — 물리 60㎡ → 분할 각 30㎡ ──────────────────────────────────────
+  const gIn = mk('gate', 'ml_gIn', '게이트(B2방향)', 'ml_게이트', { area: 30, base_stay_prob: 0.3, exit_weight: 0 })
+  const gOut = mk('gate', 'ml_gOut', '게이트(B1방향)', 'ml_게이트', { area: 30, base_stay_prob: 0.3, exit_weight: 0 })
 
-  // ─ B1↔B2 수직 이동 — 각 12/8/5㎡ ─────────────────────────────────────
-  const stB2Dn = mk('stairs', 'ml_stB2Dn', 'B2 계단(하행)', 'ml_계단B2', { area: 12, base_stay_prob: 0.2, exit_weight: 0 })
-  const stB2Up = mk('stairs', 'ml_stB2Up', 'B2 계단(상행)', 'ml_계단B2', { area: 12, base_stay_prob: 0.2, exit_weight: 0 })
+  // ─ B1↔B2 수직 이동 — 계단 25/에스컬 8/엘리베 12㎡ ──────────────────────────
+  const stB2Dn = mk('stairs', 'ml_stB2Dn', 'B2 계단(하행)', 'ml_계단B2', { area: 25, base_stay_prob: 0.2, exit_weight: 0 })
+  const stB2Up = mk('stairs', 'ml_stB2Up', 'B2 계단(상행)', 'ml_계단B2', { area: 25, base_stay_prob: 0.2, exit_weight: 0 })
   const esB2Dn = mk('escalator', 'ml_esB2Dn', 'B2 에스컬레이터(하행)', 'ml_에스컬B2', { area: 8, base_stay_prob: 0.0, exit_weight: 0 })
   const esB2Up = mk('escalator', 'ml_esB2Up', 'B2 에스컬레이터(상행)', 'ml_에스컬B2', { area: 8, base_stay_prob: 0.0, exit_weight: 0 })
-  const elvB2Dn = mk('elevator', 'ml_elvB2Dn', 'B2 엘리베이터(하행)', 'ml_엘리베B2_하행', { area: 5, base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 10, speed: 8 } })
-  const elvB2Up = mk('elevator', 'ml_elvB2Up', 'B2 엘리베이터(상행)', 'ml_엘리베B2_상행', { area: 5, base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 10, speed: 8 } })
+  const elvB2Dn = mk('elevator', 'ml_elvB2Dn', 'B2 엘리베이터(하행)', 'ml_엘리베B2_하행', { area: 12, base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 13, speed: 10 } })
+  const elvB2Up = mk('elevator', 'ml_elvB2Up', 'B2 엘리베이터(상행)', 'ml_엘리베B2_상행', { area: 12, base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 13, speed: 10 } })
 
-  // ─ B2 승강장 — 각 150㎡ ─────────────────────────────────────────────────
+  // ─ B2 승강장 — 상대식(물리 800㎡) → 분할 각 400㎡ ─────────────────────────
   const b2pb = mk('platform', 'ml_b2pb', 'B2 승강장(승차)', 'ml_B2승강장', {
-    area: 150, base_stay_prob: 1.0, exit_weight: 0,
-    train: { first_arrival_sec: 120, headway_sec: 300, jitter_sigma_sec: 8, capacity: 250, alight_kind: 'constant', alight_mean: 0, alight_std: 0, mode: 'board' },
+    area: 400, base_stay_prob: 1.0, exit_weight: 0,
+    train: { first_arrival_sec: 120, headway_sec: 300, jitter_sigma_sec: 8, capacity: 320, alight_kind: 'constant', alight_mean: 0, alight_std: 0, mode: 'board' },
   })
   const b2pa = mk('platform', 'ml_b2pa', 'B2 승강장(하차)', 'ml_B2승강장', {
-    area: 150, base_stay_prob: 0.15, exit_weight: 0,
-    train: { first_arrival_sec: 120, headway_sec: 300, jitter_sigma_sec: 8, capacity: 0, alight_kind: 'poisson', alight_mean: 80, alight_std: 0, mode: 'alight' },
+    area: 400, base_stay_prob: 0.15, exit_weight: 0,
+    train: { first_arrival_sec: 120, headway_sec: 300, jitter_sigma_sec: 8, capacity: 0, alight_kind: 'poisson', alight_mean: 100, alight_std: 0, mode: 'alight' },
   })
 
   const nodes = [
@@ -725,41 +733,48 @@ function multiLevelStation(): ProjectConfig {
 // Template 8 — 첨두 혼잡 시나리오 역 (~14 nodes) [deliberately congested — no rebalance]
 // ──────────────────────────────────────────────────────────────────────────────
 function peakCongestionStation(): ProjectConfig {
+  // T8: 의도적 혼잡 시나리오. 입구 총유입 ≈ 5.5/s >> 배차 통과 400/150≈2.67/s. → 적체 발생.
+  // 대합실 + 게이트는 현실 면적 적용. 협소 게이트(v_free=0.8)로 병목 연출.
+  // 아직 duration=3600s 내 승강장이 결국 소화함 (capacity 400 × 24회/3600s = 9600명).
   const e1i = mk('entrance', 'pk_e1i', '주 입구', 'pk_출입구1', {
-    area: 30, base_stay_prob: 0.2, exit_weight: 0,
-    generation: { kind: 'poisson', rate: 5.0 },
+    area: 20, base_stay_prob: 0.2, exit_weight: 0,
+    generation: { kind: 'poisson', rate: 3.5 },
   })
-  const e1o = mk('entrance', 'pk_e1o', '주 출구', 'pk_출입구1', { area: 30, base_stay_prob: 0.2, exit_weight: 1.0, generation: null })
+  const e1o = mk('entrance', 'pk_e1o', '주 출구', 'pk_출입구1', { area: 20, base_stay_prob: 0.2, exit_weight: 1.0, generation: null })
 
   const e2i = mk('entrance', 'pk_e2i', '이벤트 입구', 'pk_출입구2', {
-    area: 30, base_stay_prob: 0.2, exit_weight: 0,
-    generation: { kind: 'poisson', rate: 0.5, profile: [[0, 0.5], [300, 4.0], [600, 5.0], [900, 2.0], [1500, 0.5]] },
+    area: 20, base_stay_prob: 0.2, exit_weight: 0,
+    generation: { kind: 'poisson', rate: 0.5, profile: [[0, 0.5], [300, 2.5], [600, 3.5], [900, 1.5], [1500, 0.5]] },
   })
-  const e2o = mk('entrance', 'pk_e2o', '이벤트 출구', 'pk_출입구2', { area: 30, base_stay_prob: 0.2, exit_weight: 1.0, generation: null })
+  const e2o = mk('entrance', 'pk_e2o', '이벤트 출구', 'pk_출입구2', { area: 20, base_stay_prob: 0.2, exit_weight: 1.0, generation: null })
 
-  const ci = mk('passage', 'pk_ci', '대합실(진입)', 'pk_대합실', { area: 80, base_stay_prob: 0.1, exit_weight: 0 })
-  const co = mk('passage', 'pk_co', '대합실(퇴장)', 'pk_대합실', { area: 80, base_stay_prob: 0.1, exit_weight: 0 })
+  // 대합실: 중형 혼잡 대합실(물리 400㎡) → 분할 각 200㎡
+  const ci = mk('passage', 'pk_ci', '대합실(진입)', 'pk_대합실', { area: 200, base_stay_prob: 0.1, exit_weight: 0 })
+  const co = mk('passage', 'pk_co', '대합실(퇴장)', 'pk_대합실', { area: 200, base_stay_prob: 0.1, exit_weight: 0 })
 
+  // 협소 게이트: v_free=0.8(혼잡 병목), 물리 30㎡ → 분할 각 15㎡
   const narrowW = { v_free: 0.8, rho_max: 5.4, gamma: 1.913 }
   const gIn = mk('gate', 'pk_gIn', '협소 게이트(승강장방향)', 'pk_게이트', {
-    area: 8, base_stay_prob: 0.5, exit_weight: 0,
+    area: 15, base_stay_prob: 0.5, exit_weight: 0,
     weidmann: narrowW,
   })
   const gOut = mk('gate', 'pk_gOut', '협소 게이트(출구방향)', 'pk_게이트', {
-    area: 8, base_stay_prob: 0.5, exit_weight: 0,
+    area: 15, base_stay_prob: 0.5, exit_weight: 0,
     weidmann: narrowW,
   })
 
+  // 계단: 물리 50㎡ → 분할 각 25㎡
   const stDn = mk('stairs', 'pk_stDn', '계단(하행)', 'pk_계단', { area: 25, base_stay_prob: 0.2, exit_weight: 0 })
   const stUp = mk('stairs', 'pk_stUp', '계단(상행)', 'pk_계단', { area: 25, base_stay_prob: 0.2, exit_weight: 0 })
 
+  // 승강장: 섬식 대형(물리 1600㎡) → 분할 각 800㎡. headway=150s(첨두).
   const pb = mk('platform', 'pk_pb', '승강장(승차)', 'pk_승강장', {
-    area: 200, base_stay_prob: 1.0, exit_weight: 0,
-    train: { first_arrival_sec: 60, headway_sec: 300, jitter_sigma_sec: 15, capacity: 400, alight_kind: 'constant', alight_mean: 0, alight_std: 0, mode: 'board' },
+    area: 800, base_stay_prob: 1.0, exit_weight: 0,
+    train: { first_arrival_sec: 60, headway_sec: 150, jitter_sigma_sec: 15, capacity: 400, alight_kind: 'constant', alight_mean: 0, alight_std: 0, mode: 'board' },
   })
   const pa = mk('platform', 'pk_pa', '승강장(하차)', 'pk_승강장', {
-    area: 200, base_stay_prob: 0.15, exit_weight: 0,
-    train: { first_arrival_sec: 60, headway_sec: 300, jitter_sigma_sec: 15, capacity: 0, alight_kind: 'poisson', alight_mean: 200, alight_std: 0, mode: 'alight' },
+    area: 800, base_stay_prob: 0.15, exit_weight: 0,
+    train: { first_arrival_sec: 60, headway_sec: 150, jitter_sigma_sec: 15, capacity: 0, alight_kind: 'poisson', alight_mean: 200, alight_std: 0, mode: 'alight' },
   })
 
   const nodes = [e1i, e1o, e2i, e2o, ci, co, gIn, gOut, stDn, stUp, pb, pa]
@@ -787,44 +802,46 @@ function peakCongestionStation(): ProjectConfig {
 // Template 9 — 통근 첨두 패턴 역 (time-varying profile, GNN 시계열 시연)
 // ──────────────────────────────────────────────────────────────────────────────
 function commutePeakStation(): ProjectConfig {
-  // T9 (통근 첨두): headway 180s → throughput=250/180≈1.39/s. Peak target≈1.2×=1.67/s.
-  // Profile shape preserved; peak levels scaled down from 4.5/s to ≈1.7/s (was permanent freeze).
-  // Off-peak (0.3+0.2=0.5/s) << throughput → clears quickly. Peak builds then clears within scenario.
+  // T9 (통근 첨두): headway 180s(첨두배차) → throughput=300/180≈1.67/s.
   // 출퇴근 패턴: 0-1800s 저밀도, 1800-3600s 첨두, 3600-5400s 첨두 유지, 5400-7200s 급감
+  // 비첨두: 0.3+0.2=0.5/s(<<1.67), 첨두: 1.05+0.70=1.75/s(≈1.05×, 약간 초과→ 현실적 혼잡)
   const e1i = mk('entrance', 'cp_e1i', '1번 입구(통근)', 'cp_출입구1', {
-    area: 30, base_stay_prob: 0.2, exit_weight: 0,
-    generation: { kind: 'poisson', rate: 0.3, profile: [[0, 0.3], [1800, 1.0], [3600, 1.0], [5400, 0.3]] },
+    area: 20, base_stay_prob: 0.2, exit_weight: 0,
+    generation: { kind: 'poisson', rate: 0.3, profile: [[0, 0.3], [1800, 1.05], [3600, 1.05], [5400, 0.3]] },
   })
   const e1o = mk('entrance', 'cp_e1o', '1번 출구', 'cp_출입구1', {
-    area: 30, base_stay_prob: 0.2, exit_weight: 1.0, generation: null,
+    area: 20, base_stay_prob: 0.2, exit_weight: 1.0, generation: null,
   })
   const e2i = mk('entrance', 'cp_e2i', '2번 입구(통근)', 'cp_출입구2', {
-    area: 30, base_stay_prob: 0.2, exit_weight: 0,
-    generation: { kind: 'poisson', rate: 0.2, profile: [[0, 0.2], [1800, 0.7], [3600, 0.7], [5400, 0.2]] },
+    area: 20, base_stay_prob: 0.2, exit_weight: 0,
+    generation: { kind: 'poisson', rate: 0.2, profile: [[0, 0.2], [1800, 0.70], [3600, 0.70], [5400, 0.2]] },
   })
   const e2o = mk('entrance', 'cp_e2o', '2번 출구', 'cp_출입구2', {
-    area: 30, base_stay_prob: 0.2, exit_weight: 1.0, generation: null,
+    area: 20, base_stay_prob: 0.2, exit_weight: 1.0, generation: null,
   })
 
-  const ci = mk('passage', 'cp_ci', '대합실(진입)', 'cp_대합실', { area: 100, base_stay_prob: 0.1, exit_weight: 0 })
-  const co = mk('passage', 'cp_co', '대합실(퇴장)', 'cp_대합실', { area: 100, base_stay_prob: 0.1, exit_weight: 0 })
+  // 대합실: 중형(물리 600㎡) → 분할 각 300㎡
+  const ci = mk('passage', 'cp_ci', '대합실(진입)', 'cp_대합실', { area: 300, base_stay_prob: 0.1, exit_weight: 0 })
+  const co = mk('passage', 'cp_co', '대합실(퇴장)', 'cp_대합실', { area: 300, base_stay_prob: 0.1, exit_weight: 0 })
 
-  const gi = mk('gate', 'cp_gi', '게이트(승강장방향)', 'cp_게이트', { area: 10, base_stay_prob: 0.3, exit_weight: 0 })
-  const go_ = mk('gate', 'cp_go', '게이트(출구방향)', 'cp_게이트', { area: 10, base_stay_prob: 0.3, exit_weight: 0 })
+  // 게이트: 물리 60㎡ → 분할 각 30㎡
+  const gi = mk('gate', 'cp_gi', '게이트(승강장방향)', 'cp_게이트', { area: 30, base_stay_prob: 0.3, exit_weight: 0 })
+  const go_ = mk('gate', 'cp_go', '게이트(출구방향)', 'cp_게이트', { area: 30, base_stay_prob: 0.3, exit_weight: 0 })
 
-  const stDn = mk('stairs', 'cp_stDn', '계단(하행)', 'cp_계단', { area: 12, base_stay_prob: 0.2, exit_weight: 0 })
-  const stUp = mk('stairs', 'cp_stUp', '계단(상행)', 'cp_계단', { area: 12, base_stay_prob: 0.2, exit_weight: 0 })
+  // 계단/에스컬레이터
+  const stDn = mk('stairs', 'cp_stDn', '계단(하행)', 'cp_계단', { area: 25, base_stay_prob: 0.2, exit_weight: 0 })
+  const stUp = mk('stairs', 'cp_stUp', '계단(상행)', 'cp_계단', { area: 25, base_stay_prob: 0.2, exit_weight: 0 })
   const esDn = mk('escalator', 'cp_esDn', '에스컬레이터(하행)', 'cp_에스컬', { area: 8, base_stay_prob: 0.0, exit_weight: 0 })
   const esUp = mk('escalator', 'cp_esUp', '에스컬레이터(상행)', 'cp_에스컬', { area: 8, base_stay_prob: 0.0, exit_weight: 0 })
 
-  // headway_sec=180 (첨두 배차 단축) → throughput=250/180≈1.39/s. alight_mean raised to 120 for turnover.
+  // 섬식 승강장(물리 1400㎡) → 분할 각 700㎡. headway=180s(첨두).
   const pb = mk('platform', 'cp_pb', '승강장(승차)', 'cp_승강장', {
-    area: 150, base_stay_prob: 1.0, exit_weight: 0,
-    train: { first_arrival_sec: 60, headway_sec: 180, jitter_sigma_sec: 10, capacity: 250, alight_kind: 'constant', alight_mean: 0, alight_std: 0, mode: 'board' },
+    area: 700, base_stay_prob: 1.0, exit_weight: 0,
+    train: { first_arrival_sec: 60, headway_sec: 180, jitter_sigma_sec: 10, capacity: 300, alight_kind: 'constant', alight_mean: 0, alight_std: 0, mode: 'board' },
   })
   const pa = mk('platform', 'cp_pa', '승강장(하차)', 'cp_승강장', {
-    area: 150, base_stay_prob: 0.15, exit_weight: 0,
-    train: { first_arrival_sec: 60, headway_sec: 180, jitter_sigma_sec: 10, capacity: 0, alight_kind: 'poisson', alight_mean: 120, alight_std: 0, mode: 'alight' },
+    area: 700, base_stay_prob: 0.15, exit_weight: 0,
+    train: { first_arrival_sec: 60, headway_sec: 180, jitter_sigma_sec: 10, capacity: 0, alight_kind: 'poisson', alight_mean: 130, alight_std: 0, mode: 'alight' },
   })
 
   const nodes = [e1i, e1o, e2i, e2o, ci, co, gi, go_, stDn, stUp, esDn, esUp, pb, pa]
@@ -855,27 +872,32 @@ function commutePeakStation(): ProjectConfig {
 // Template 10 — 심야 저밀도 역
 // ──────────────────────────────────────────────────────────────────────────────
 function lateNightStation(): ProjectConfig {
+  // T10: 심야 저밀도. 배차 720s(12분), 정원 150 → 통과 0.208/s.
+  // 유입 0.08/s (0.38×) → 거의 비움. 면적은 실제값 적용.
   const e1i = mk('entrance', 'ln_e1i', '1번 입구(심야)', 'ln_출입구1', {
-    area: 30, base_stay_prob: 0.2, exit_weight: 0,
-    generation: { kind: 'poisson', rate: 0.1 },
+    area: 15, base_stay_prob: 0.2, exit_weight: 0,
+    generation: { kind: 'poisson', rate: 0.08 },
   })
   const e1o = mk('entrance', 'ln_e1o', '1번 출구', 'ln_출입구1', {
-    area: 30, base_stay_prob: 0.2, exit_weight: 1.0, generation: null,
+    area: 15, base_stay_prob: 0.2, exit_weight: 1.0, generation: null,
   })
 
-  const gi = mk('gate', 'ln_gi', '게이트(승강장방향)', 'ln_게이트', { area: 10, base_stay_prob: 0.3, exit_weight: 0 })
-  const go_ = mk('gate', 'ln_go', '게이트(출구방향)', 'ln_게이트', { area: 10, base_stay_prob: 0.3, exit_weight: 0 })
+  // 게이트: 소형(물리 30㎡) → 분할 각 15㎡
+  const gi = mk('gate', 'ln_gi', '게이트(승강장방향)', 'ln_게이트', { area: 15, base_stay_prob: 0.3, exit_weight: 0 })
+  const go_ = mk('gate', 'ln_go', '게이트(출구방향)', 'ln_게이트', { area: 15, base_stay_prob: 0.3, exit_weight: 0 })
 
-  const stDn = mk('stairs', 'ln_stDn', '계단(하행)', 'ln_계단', { area: 12, base_stay_prob: 0.2, exit_weight: 0 })
-  const stUp = mk('stairs', 'ln_stUp', '계단(상행)', 'ln_계단', { area: 12, base_stay_prob: 0.2, exit_weight: 0 })
+  // 계단: 물리 30㎡ → 분할 각 15㎡
+  const stDn = mk('stairs', 'ln_stDn', '계단(하행)', 'ln_계단', { area: 15, base_stay_prob: 0.2, exit_weight: 0 })
+  const stUp = mk('stairs', 'ln_stUp', '계단(상행)', 'ln_계단', { area: 15, base_stay_prob: 0.2, exit_weight: 0 })
 
+  // 상대식 소형 승강장(물리 500㎡) → 분할 각 250㎡. 심야 headway=720s.
   const pb = mk('platform', 'ln_pb', '승강장(승차)', 'ln_승강장', {
-    area: 150, base_stay_prob: 1.0, exit_weight: 0,
-    train: { first_arrival_sec: 120, headway_sec: 600, jitter_sigma_sec: 30, capacity: 200, alight_kind: 'constant', alight_mean: 0, alight_std: 0, mode: 'board' },
+    area: 250, base_stay_prob: 1.0, exit_weight: 0,
+    train: { first_arrival_sec: 180, headway_sec: 720, jitter_sigma_sec: 20, capacity: 150, alight_kind: 'constant', alight_mean: 0, alight_std: 0, mode: 'board' },
   })
   const pa = mk('platform', 'ln_pa', '승강장(하차)', 'ln_승강장', {
-    area: 150, base_stay_prob: 0.15, exit_weight: 0,
-    train: { first_arrival_sec: 120, headway_sec: 600, jitter_sigma_sec: 30, capacity: 0, alight_kind: 'poisson', alight_mean: 10, alight_std: 0, mode: 'alight' },
+    area: 250, base_stay_prob: 0.15, exit_weight: 0,
+    train: { first_arrival_sec: 180, headway_sec: 720, jitter_sigma_sec: 20, capacity: 0, alight_kind: 'poisson', alight_mean: 12, alight_std: 0, mode: 'alight' },
   })
 
   const nodes = [e1i, e1o, gi, go_, stDn, stUp, pb, pa]
@@ -899,29 +921,33 @@ function lateNightStation(): ProjectConfig {
 // 플랫폼에 initial_population=150 → 시작부터 혼잡 후 서서히 해소
 // ──────────────────────────────────────────────────────────────────────────────
 function initialCongestionStation(): ProjectConfig {
+  // T11: 열차 연착으로 승강장 초기 혼잡. 입구 0.7/s, 통과 350/300≈1.17/s → 유입 OK.
+  // initial_population=150 유지(테스트 assertion). first_arrival 600s(연착).
   const e1i = mk('entrance', 'ic_e1i', '1번 입구', 'ic_출입구1', {
-    area: 30, base_stay_prob: 0.2, exit_weight: 0,
-    generation: { kind: 'poisson', rate: 0.8 },
+    area: 18, base_stay_prob: 0.2, exit_weight: 0,
+    generation: { kind: 'poisson', rate: 0.70 },
   })
   const e1o = mk('entrance', 'ic_e1o', '1번 출구', 'ic_출입구1', {
-    area: 30, base_stay_prob: 0.2, exit_weight: 1.0, generation: null,
+    area: 18, base_stay_prob: 0.2, exit_weight: 1.0, generation: null,
   })
 
-  const gi = mk('gate', 'ic_gi', '게이트(승강장방향)', 'ic_게이트', { area: 10, base_stay_prob: 0.3, exit_weight: 0 })
-  const go_ = mk('gate', 'ic_go', '게이트(출구방향)', 'ic_게이트', { area: 10, base_stay_prob: 0.3, exit_weight: 0 })
+  // 게이트: 물리 40㎡ → 분할 각 20㎡
+  const gi = mk('gate', 'ic_gi', '게이트(승강장방향)', 'ic_게이트', { area: 20, base_stay_prob: 0.3, exit_weight: 0 })
+  const go_ = mk('gate', 'ic_go', '게이트(출구방향)', 'ic_게이트', { area: 20, base_stay_prob: 0.3, exit_weight: 0 })
 
-  const stDn = mk('stairs', 'ic_stDn', '계단(하행)', 'ic_계단', { area: 12, base_stay_prob: 0.2, exit_weight: 0 })
-  const stUp = mk('stairs', 'ic_stUp', '계단(상행)', 'ic_계단', { area: 12, base_stay_prob: 0.2, exit_weight: 0 })
+  // 계단: 물리 40㎡ → 분할 각 20㎡
+  const stDn = mk('stairs', 'ic_stDn', '계단(하행)', 'ic_계단', { area: 20, base_stay_prob: 0.2, exit_weight: 0 })
+  const stUp = mk('stairs', 'ic_stUp', '계단(상행)', 'ic_계단', { area: 20, base_stay_prob: 0.2, exit_weight: 0 })
 
-  // 승강장에 초기 인원 150명 pre-loaded (연착으로 체류 중)
+  // 승강장에 초기 인원 150명 pre-loaded (연착으로 체류 중). 상대식(물리 800㎡) → 분할 각 400㎡.
   const pb = mk('platform', 'ic_pb', '승강장(승차)', 'ic_승강장', {
-    area: 150, base_stay_prob: 1.0, exit_weight: 0,
+    area: 400, base_stay_prob: 1.0, exit_weight: 0,
     initial_population: 150,
     train: { first_arrival_sec: 600, headway_sec: 300, jitter_sigma_sec: 15, capacity: 350, alight_kind: 'constant', alight_mean: 0, alight_std: 0, mode: 'board' },
   })
   const pa = mk('platform', 'ic_pa', '승강장(하차)', 'ic_승강장', {
-    area: 150, base_stay_prob: 0.15, exit_weight: 0,
-    train: { first_arrival_sec: 600, headway_sec: 300, jitter_sigma_sec: 15, capacity: 0, alight_kind: 'poisson', alight_mean: 80, alight_std: 0, mode: 'alight' },
+    area: 400, base_stay_prob: 0.15, exit_weight: 0,
+    train: { first_arrival_sec: 600, headway_sec: 300, jitter_sigma_sec: 15, capacity: 0, alight_kind: 'poisson', alight_mean: 100, alight_std: 0, mode: 'alight' },
   })
 
   const nodes = [e1i, e1o, gi, go_, stDn, stUp, pb, pa]
@@ -970,9 +996,9 @@ function megaComplexStation(): ProjectConfig {
   // 출입구 1~4: 동측 대합실(B1-A) 연결, 출입구 5~10: 서측 대합실(B1-B) 연결
   // 총 rate ≈ 4.1/s. 출퇴근 profile 적용: 출입구3(batch), 출입구7(profile)
   const me = (id: string, name: string, group: string, overrides: Partial<StationNode> = {}) =>
-    mk('entrance', id, name, group, { area: 30, base_stay_prob: 0.2, exit_weight: 0, ...overrides })
+    mk('entrance', id, name, group, { area: 20, base_stay_prob: 0.2, exit_weight: 0, ...overrides })
   const meo = (id: string, name: string, group: string) =>
-    mk('entrance', id, name, group, { area: 30, base_stay_prob: 0.2, exit_weight: 1.0, generation: null })
+    mk('entrance', id, name, group, { area: 20, base_stay_prob: 0.2, exit_weight: 1.0, generation: null })
 
   // 동측 출입구 1~4
   // 총 유입 ≈ 3.43/s 정상, 첨두 시(e7i 피크) ≈ 4.0/s ≤ 1.1 × 3.722/s boarding cap
@@ -1005,122 +1031,120 @@ function megaComplexStation(): ProjectConfig {
   const mxe10o = meo('mx_e10o','10번 출구',      'mx_출입구10')
 
   // ─── 지상↔B1 수직이동 (동측 3기 / 서측 3기) ────────────────────────
-  // 동측: 계단A·에스컬레이터A·엘리베이터A
-  const mxsADn  = mk('stairs',    'mx_sADn',  '동측 계단(하행)',         'mx_계단A',     { area: 12, base_stay_prob: 0.2, exit_weight: 0 })
-  const mxsAUp  = mk('stairs',    'mx_sAUp',  '동측 계단(상행)',         'mx_계단A',     { area: 12, base_stay_prob: 0.2, exit_weight: 0 })
+  // 동측: 계단A(25㎡)·에스컬레이터A(8㎡)·엘리베이터A(12㎡)
+  const mxsADn  = mk('stairs',    'mx_sADn',  '동측 계단(하행)',         'mx_계단A',     { area: 25, base_stay_prob: 0.2, exit_weight: 0 })
+  const mxsAUp  = mk('stairs',    'mx_sAUp',  '동측 계단(상행)',         'mx_계단A',     { area: 25, base_stay_prob: 0.2, exit_weight: 0 })
   const mxesADn = mk('escalator', 'mx_esADn', '동측 에스컬레이터(하행)', 'mx_에스컬A',  { area: 8,  base_stay_prob: 0.0, exit_weight: 0 })
   const mxesAUp = mk('escalator', 'mx_esAUp', '동측 에스컬레이터(상행)', 'mx_에스컬A',  { area: 8,  base_stay_prob: 0.0, exit_weight: 0 })
-  const mxelADn = mk('elevator',  'mx_elADn', '동측 엘리베이터(하행)',   'mx_엘리베A하', { area: 5,  base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 13, speed: 8 } })
-  const mxelAUp = mk('elevator',  'mx_elAUp', '동측 엘리베이터(상행)',   'mx_엘리베A상', { area: 5,  base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 13, speed: 8 } })
+  const mxelADn = mk('elevator',  'mx_elADn', '동측 엘리베이터(하행)',   'mx_엘리베A하', { area: 12, base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 15, speed: 10 } })
+  const mxelAUp = mk('elevator',  'mx_elAUp', '동측 엘리베이터(상행)',   'mx_엘리베A상', { area: 12, base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 15, speed: 10 } })
 
-  // 서측: 계단B·에스컬레이터B·엘리베이터B
-  const mxsBDn  = mk('stairs',    'mx_sBDn',  '서측 계단(하행)',         'mx_계단B',     { area: 12, base_stay_prob: 0.2, exit_weight: 0 })
-  const mxsBUp  = mk('stairs',    'mx_sBUp',  '서측 계단(상행)',         'mx_계단B',     { area: 12, base_stay_prob: 0.2, exit_weight: 0 })
+  // 서측: 계단B(25㎡)·에스컬레이터B(8㎡)·엘리베이터B(12㎡)
+  const mxsBDn  = mk('stairs',    'mx_sBDn',  '서측 계단(하행)',         'mx_계단B',     { area: 25, base_stay_prob: 0.2, exit_weight: 0 })
+  const mxsBUp  = mk('stairs',    'mx_sBUp',  '서측 계단(상행)',         'mx_계단B',     { area: 25, base_stay_prob: 0.2, exit_weight: 0 })
   const mxesBDn = mk('escalator', 'mx_esBDn', '서측 에스컬레이터(하행)', 'mx_에스컬B',  { area: 8,  base_stay_prob: 0.0, exit_weight: 0 })
   const mxesBUp = mk('escalator', 'mx_esBUp', '서측 에스컬레이터(상행)', 'mx_에스컬B',  { area: 8,  base_stay_prob: 0.0, exit_weight: 0 })
-  const mxelBDn = mk('elevator',  'mx_elBDn', '서측 엘리베이터(하행)',   'mx_엘리베B하', { area: 5,  base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 13, speed: 8 } })
-  const mxelBUp = mk('elevator',  'mx_elBUp', '서측 엘리베이터(상행)',   'mx_엘리베B상', { area: 5,  base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 13, speed: 8 } })
+  const mxelBDn = mk('elevator',  'mx_elBDn', '서측 엘리베이터(하행)',   'mx_엘리베B하', { area: 12, base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 15, speed: 10 } })
+  const mxelBUp = mk('elevator',  'mx_elBUp', '서측 엘리베이터(상행)',   'mx_엘리베B상', { area: 12, base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 15, speed: 10 } })
 
-  // ─── B1 대합실 — 동측(A)·서측(B) 두 구역 ───────────────────────────
-  const mxb1Ai = mk('passage', 'mx_b1Ai', 'B1 동측 대합실(진입)', 'mx_B1대합실A', { area: 120, base_stay_prob: 0.05, exit_weight: 0 })
-  const mxb1Ao = mk('passage', 'mx_b1Ao', 'B1 동측 대합실(퇴장)', 'mx_B1대합실A', { area: 120, base_stay_prob: 0.05, exit_weight: 0 })
-  const mxb1Bi = mk('passage', 'mx_b1Bi', 'B1 서측 대합실(진입)', 'mx_B1대합실B', { area: 120, base_stay_prob: 0.05, exit_weight: 0 })
-  const mxb1Bo = mk('passage', 'mx_b1Bo', 'B1 서측 대합실(퇴장)', 'mx_B1대합실B', { area: 120, base_stay_prob: 0.05, exit_weight: 0 })
-  // 중앙 연결 통로 (동↔서 대합실 연결, 유료구역 외부)
-  const mxb1Ci = mk('passage', 'mx_b1Ci', 'B1 중앙 연결통로(진입)', 'mx_B1중앙', { area: 60,  base_stay_prob: 0.05, exit_weight: 0 })
-  const mxb1Co = mk('passage', 'mx_b1Co', 'B1 중앙 연결통로(퇴장)', 'mx_B1중앙', { area: 60,  base_stay_prob: 0.05, exit_weight: 0 })
+  // ─── B1 대합실 — 동측(A)·서측(B): 대형 각 800㎡(물리 1600㎡) → 분할 400㎡ ─
+  const mxb1Ai = mk('passage', 'mx_b1Ai', 'B1 동측 대합실(진입)', 'mx_B1대합실A', { area: 400, base_stay_prob: 0.05, exit_weight: 0 })
+  const mxb1Ao = mk('passage', 'mx_b1Ao', 'B1 동측 대합실(퇴장)', 'mx_B1대합실A', { area: 400, base_stay_prob: 0.05, exit_weight: 0 })
+  const mxb1Bi = mk('passage', 'mx_b1Bi', 'B1 서측 대합실(진입)', 'mx_B1대합실B', { area: 400, base_stay_prob: 0.05, exit_weight: 0 })
+  const mxb1Bo = mk('passage', 'mx_b1Bo', 'B1 서측 대합실(퇴장)', 'mx_B1대합실B', { area: 400, base_stay_prob: 0.05, exit_weight: 0 })
+  // 중앙 연결 통로: 물리 240㎡ → 분할 각 120㎡
+  const mxb1Ci = mk('passage', 'mx_b1Ci', 'B1 중앙 연결통로(진입)', 'mx_B1중앙', { area: 120, base_stay_prob: 0.05, exit_weight: 0 })
+  const mxb1Co = mk('passage', 'mx_b1Co', 'B1 중앙 연결통로(퇴장)', 'mx_B1중앙', { area: 120, base_stay_prob: 0.05, exit_weight: 0 })
 
-  // ─── 게이트 뱅크 (동/서 유료구역 진입·퇴장) ──────────────────────────
-  const mxgAi = mk('gate', 'mx_gAi', '동측 게이트(유료구역 진입)', 'mx_게이트A', { area: 15, base_stay_prob: 0.3, exit_weight: 0 })
-  const mxgAo = mk('gate', 'mx_gAo', '동측 게이트(유료구역 퇴장)', 'mx_게이트A', { area: 15, base_stay_prob: 0.3, exit_weight: 0 })
-  const mxgBi = mk('gate', 'mx_gBi', '서측 게이트(유료구역 진입)', 'mx_게이트B', { area: 15, base_stay_prob: 0.3, exit_weight: 0 })
-  const mxgBo = mk('gate', 'mx_gBo', '서측 게이트(유료구역 퇴장)', 'mx_게이트B', { area: 15, base_stay_prob: 0.3, exit_weight: 0 })
+  // ─── 게이트 뱅크 (동/서 유료구역 진입·퇴장) — 대형 개찰: 물리 120㎡ → 분할 60㎡ ─
+  const mxgAi = mk('gate', 'mx_gAi', '동측 게이트(유료구역 진입)', 'mx_게이트A', { area: 60, base_stay_prob: 0.3, exit_weight: 0 })
+  const mxgAo = mk('gate', 'mx_gAo', '동측 게이트(유료구역 퇴장)', 'mx_게이트A', { area: 60, base_stay_prob: 0.3, exit_weight: 0 })
+  const mxgBi = mk('gate', 'mx_gBi', '서측 게이트(유료구역 진입)', 'mx_게이트B', { area: 60, base_stay_prob: 0.3, exit_weight: 0 })
+  const mxgBo = mk('gate', 'mx_gBo', '서측 게이트(유료구역 퇴장)', 'mx_게이트B', { area: 60, base_stay_prob: 0.3, exit_weight: 0 })
 
-  // ─── B1↔B2 수직이동 (호선1/호선3상행 방향) ───────────────────────────
-  // 동측 쪽 B2 수직(계단C / 에스컬C / 엘리베C)
-  const mxsC2Dn  = mk('stairs',    'mx_sC2Dn',  'B2 계단(하행)',         'mx_계단C2',    { area: 12, base_stay_prob: 0.2, exit_weight: 0 })
-  const mxsC2Up  = mk('stairs',    'mx_sC2Up',  'B2 계단(상행)',         'mx_계단C2',    { area: 12, base_stay_prob: 0.2, exit_weight: 0 })
+  // ─── B1↔B2 수직이동 (호선1/호선3상행 방향) — 계단25/에스컬8/엘리베12㎡ ────
+  const mxsC2Dn  = mk('stairs',    'mx_sC2Dn',  'B2 계단(하행)',         'mx_계단C2',    { area: 25, base_stay_prob: 0.2, exit_weight: 0 })
+  const mxsC2Up  = mk('stairs',    'mx_sC2Up',  'B2 계단(상행)',         'mx_계단C2',    { area: 25, base_stay_prob: 0.2, exit_weight: 0 })
   const mxesC2Dn = mk('escalator', 'mx_esC2Dn', 'B2 에스컬레이터(하행)', 'mx_에스컬C2', { area: 8,  base_stay_prob: 0.0, exit_weight: 0 })
   const mxesC2Up = mk('escalator', 'mx_esC2Up', 'B2 에스컬레이터(상행)', 'mx_에스컬C2', { area: 8,  base_stay_prob: 0.0, exit_weight: 0 })
-  const mxelC2Dn = mk('elevator',  'mx_elC2Dn', 'B2 엘리베이터(하행)',   'mx_엘리베C2하',{ area: 5,  base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 12, speed: 8 } })
-  const mxelC2Up = mk('elevator',  'mx_elC2Up', 'B2 엘리베이터(상행)',   'mx_엘리베C2상',{ area: 5,  base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 12, speed: 8 } })
+  const mxelC2Dn = mk('elevator',  'mx_elC2Dn', 'B2 엘리베이터(하행)',   'mx_엘리베C2하',{ area: 12, base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 15, speed: 10 } })
+  const mxelC2Up = mk('elevator',  'mx_elC2Up', 'B2 엘리베이터(상행)',   'mx_엘리베C2상',{ area: 12, base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 15, speed: 10 } })
 
-  // ─── B1↔B3 수직이동 (호선2/호선3하행 방향) ───────────────────────────
-  // 서측 쪽 B3 수직(계단D / 에스컬D / 엘리베D)
-  const mxsD3Dn  = mk('stairs',    'mx_sD3Dn',  'B3 계단(하행)',         'mx_계단D3',    { area: 12, base_stay_prob: 0.2, exit_weight: 0 })
-  const mxsD3Up  = mk('stairs',    'mx_sD3Up',  'B3 계단(상행)',         'mx_계단D3',    { area: 12, base_stay_prob: 0.2, exit_weight: 0 })
+  // ─── B1↔B3 수직이동 (호선2/호선3하행 방향) — 계단25/에스컬8/엘리베12㎡ ────
+  const mxsD3Dn  = mk('stairs',    'mx_sD3Dn',  'B3 계단(하행)',         'mx_계단D3',    { area: 25, base_stay_prob: 0.2, exit_weight: 0 })
+  const mxsD3Up  = mk('stairs',    'mx_sD3Up',  'B3 계단(상행)',         'mx_계단D3',    { area: 25, base_stay_prob: 0.2, exit_weight: 0 })
   const mxesD3Dn = mk('escalator', 'mx_esD3Dn', 'B3 에스컬레이터(하행)', 'mx_에스컬D3', { area: 8,  base_stay_prob: 0.0, exit_weight: 0 })
   const mxesD3Up = mk('escalator', 'mx_esD3Up', 'B3 에스컬레이터(상행)', 'mx_에스컬D3', { area: 8,  base_stay_prob: 0.0, exit_weight: 0 })
-  const mxelD3Dn = mk('elevator',  'mx_elD3Dn', 'B3 엘리베이터(하행)',   'mx_엘리베D3하',{ area: 5,  base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 12, speed: 8 } })
-  const mxelD3Up = mk('elevator',  'mx_elD3Up', 'B3 엘리베이터(상행)',   'mx_엘리베D3상',{ area: 5,  base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 12, speed: 8 } })
+  const mxelD3Dn = mk('elevator',  'mx_elD3Dn', 'B3 엘리베이터(하행)',   'mx_엘리베D3하',{ area: 12, base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 15, speed: 10 } })
+  const mxelD3Up = mk('elevator',  'mx_elD3Up', 'B3 엘리베이터(상행)',   'mx_엘리베D3상',{ area: 12, base_stay_prob: 1.0, exit_weight: 0, elevator: { capacity: 15, speed: 10 } })
 
   // ─── B2 플랫폼: 호선1 상행/하행 + 호선3 상행 ─────────────────────────
-  // 호선1 상행 (B2)
+  // 호선1 상행 (B2) — 상대식(물리 700㎡) → 분할 각 350㎡
   const mxL1upB = mk('platform', 'mx_L1upB', '호선1 상행 승강장(승차)', 'mx_L1상행',   {
-    area: 150, base_stay_prob: 1.0, exit_weight: 0,
-    train: { first_arrival_sec: 60,  headway_sec: 300, jitter_sigma_sec: 8, capacity: 200, alight_kind: 'constant', alight_mean: 0,  alight_std: 0, mode: 'board' },
+    area: 350, base_stay_prob: 1.0, exit_weight: 0,
+    train: { first_arrival_sec: 60,  headway_sec: 300, jitter_sigma_sec: 8, capacity: 250, alight_kind: 'constant', alight_mean: 0,  alight_std: 0, mode: 'board' },
   })
   const mxL1upA = mk('platform', 'mx_L1upA', '호선1 상행 승강장(하차)', 'mx_L1상행',   {
-    area: 150, base_stay_prob: 0.15, exit_weight: 0,
-    train: { first_arrival_sec: 60,  headway_sec: 300, jitter_sigma_sec: 8, capacity: 0,   alight_kind: 'poisson', alight_mean: 70, alight_std: 0, mode: 'alight' },
+    area: 350, base_stay_prob: 0.15, exit_weight: 0,
+    train: { first_arrival_sec: 60,  headway_sec: 300, jitter_sigma_sec: 8, capacity: 0,   alight_kind: 'poisson', alight_mean: 80, alight_std: 0, mode: 'alight' },
   })
-  // 호선1 하행 (B2)
+  // 호선1 하행 (B2) — 각 350㎡
   const mxL1dnB = mk('platform', 'mx_L1dnB', '호선1 하행 승강장(승차)', 'mx_L1하행',   {
-    area: 150, base_stay_prob: 1.0, exit_weight: 0,
-    train: { first_arrival_sec: 150, headway_sec: 300, jitter_sigma_sec: 8, capacity: 200, alight_kind: 'constant', alight_mean: 0,  alight_std: 0, mode: 'board' },
+    area: 350, base_stay_prob: 1.0, exit_weight: 0,
+    train: { first_arrival_sec: 150, headway_sec: 300, jitter_sigma_sec: 8, capacity: 250, alight_kind: 'constant', alight_mean: 0,  alight_std: 0, mode: 'board' },
   })
   const mxL1dnA = mk('platform', 'mx_L1dnA', '호선1 하행 승강장(하차)', 'mx_L1하행',   {
-    area: 150, base_stay_prob: 0.15, exit_weight: 0,
-    train: { first_arrival_sec: 150, headway_sec: 300, jitter_sigma_sec: 8, capacity: 0,   alight_kind: 'poisson', alight_mean: 70, alight_std: 0, mode: 'alight' },
+    area: 350, base_stay_prob: 0.15, exit_weight: 0,
+    train: { first_arrival_sec: 150, headway_sec: 300, jitter_sigma_sec: 8, capacity: 0,   alight_kind: 'poisson', alight_mean: 80, alight_std: 0, mode: 'alight' },
   })
-  // 호선3 상행 (B2) — cap↑200/hw↓300s: 0.667/s (was 160/360=0.444/s; raised to avoid L3 backlog)
+  // 호선3 상행 (B2) — 각 300㎡(섬식 소형). 0.667/s
   const mxL3upB = mk('platform', 'mx_L3upB', '호선3 상행 승강장(승차)', 'mx_L3상행',   {
-    area: 130, base_stay_prob: 1.0, exit_weight: 0,
-    train: { first_arrival_sec: 120, headway_sec: 300, jitter_sigma_sec: 10,capacity: 200, alight_kind: 'constant', alight_mean: 0,  alight_std: 0, mode: 'board' },
+    area: 300, base_stay_prob: 1.0, exit_weight: 0,
+    train: { first_arrival_sec: 120, headway_sec: 300, jitter_sigma_sec: 10, capacity: 200, alight_kind: 'constant', alight_mean: 0,  alight_std: 0, mode: 'board' },
   })
   const mxL3upA = mk('platform', 'mx_L3upA', '호선3 상행 승강장(하차)', 'mx_L3상행',   {
-    area: 130, base_stay_prob: 0.15, exit_weight: 0,
-    train: { first_arrival_sec: 120, headway_sec: 300, jitter_sigma_sec: 10,capacity: 0,   alight_kind: 'poisson', alight_mean: 55, alight_std: 0, mode: 'alight' },
+    area: 300, base_stay_prob: 0.15, exit_weight: 0,
+    train: { first_arrival_sec: 120, headway_sec: 300, jitter_sigma_sec: 10, capacity: 0,   alight_kind: 'poisson', alight_mean: 60, alight_std: 0, mode: 'alight' },
   })
 
   // ─── B3 플랫폼: 호선2 상행/하행 + 호선3 하행 ─────────────────────────
-  // 호선2 상행 (B3)
+  // 호선2 상행 (B3) — 상대식(물리 750㎡) → 분할 각 375㎡
   const mxL2upB = mk('platform', 'mx_L2upB', '호선2 상행 승강장(승차)', 'mx_L2상행',   {
-    area: 150, base_stay_prob: 1.0, exit_weight: 0,
-    train: { first_arrival_sec: 90,  headway_sec: 240, jitter_sigma_sec: 8, capacity: 180, alight_kind: 'constant', alight_mean: 0,  alight_std: 0, mode: 'board' },
+    area: 375, base_stay_prob: 1.0, exit_weight: 0,
+    train: { first_arrival_sec: 90,  headway_sec: 240, jitter_sigma_sec: 8, capacity: 220, alight_kind: 'constant', alight_mean: 0,  alight_std: 0, mode: 'board' },
   })
   const mxL2upA = mk('platform', 'mx_L2upA', '호선2 상행 승강장(하차)', 'mx_L2상행',   {
-    area: 150, base_stay_prob: 0.15, exit_weight: 0,
-    train: { first_arrival_sec: 90,  headway_sec: 240, jitter_sigma_sec: 8, capacity: 0,   alight_kind: 'poisson', alight_mean: 60, alight_std: 0, mode: 'alight' },
+    area: 375, base_stay_prob: 0.15, exit_weight: 0,
+    train: { first_arrival_sec: 90,  headway_sec: 240, jitter_sigma_sec: 8, capacity: 0,   alight_kind: 'poisson', alight_mean: 70, alight_std: 0, mode: 'alight' },
   })
-  // 호선2 하행 (B3)
+  // 호선2 하행 (B3) — 각 375㎡
   const mxL2dnB = mk('platform', 'mx_L2dnB', '호선2 하행 승강장(승차)', 'mx_L2하행',   {
-    area: 150, base_stay_prob: 1.0, exit_weight: 0,
-    train: { first_arrival_sec: 210, headway_sec: 240, jitter_sigma_sec: 8, capacity: 180, alight_kind: 'constant', alight_mean: 0,  alight_std: 0, mode: 'board' },
+    area: 375, base_stay_prob: 1.0, exit_weight: 0,
+    train: { first_arrival_sec: 210, headway_sec: 240, jitter_sigma_sec: 8, capacity: 220, alight_kind: 'constant', alight_mean: 0,  alight_std: 0, mode: 'board' },
   })
   const mxL2dnA = mk('platform', 'mx_L2dnA', '호선2 하행 승강장(하차)', 'mx_L2하행',   {
-    area: 150, base_stay_prob: 0.15, exit_weight: 0,
-    train: { first_arrival_sec: 210, headway_sec: 240, jitter_sigma_sec: 8, capacity: 0,   alight_kind: 'poisson', alight_mean: 60, alight_std: 0, mode: 'alight' },
+    area: 375, base_stay_prob: 0.15, exit_weight: 0,
+    train: { first_arrival_sec: 210, headway_sec: 240, jitter_sigma_sec: 8, capacity: 0,   alight_kind: 'poisson', alight_mean: 70, alight_std: 0, mode: 'alight' },
   })
-  // 호선3 하행 (B3) — cap↑200/hw↓300s: 0.667/s (was 160/360=0.444/s; raised to avoid L3 backlog)
+  // 호선3 하행 (B3) — 각 300㎡. 0.667/s
   const mxL3dnB = mk('platform', 'mx_L3dnB', '호선3 하행 승강장(승차)', 'mx_L3하행',   {
-    area: 130, base_stay_prob: 1.0, exit_weight: 0,
-    train: { first_arrival_sec: 300, headway_sec: 300, jitter_sigma_sec: 10,capacity: 200, alight_kind: 'constant', alight_mean: 0,  alight_std: 0, mode: 'board' },
+    area: 300, base_stay_prob: 1.0, exit_weight: 0,
+    train: { first_arrival_sec: 300, headway_sec: 300, jitter_sigma_sec: 10, capacity: 200, alight_kind: 'constant', alight_mean: 0,  alight_std: 0, mode: 'board' },
   })
   const mxL3dnA = mk('platform', 'mx_L3dnA', '호선3 하행 승강장(하차)', 'mx_L3하행',   {
-    area: 130, base_stay_prob: 0.15, exit_weight: 0,
-    train: { first_arrival_sec: 300, headway_sec: 300, jitter_sigma_sec: 10,capacity: 0,   alight_kind: 'poisson', alight_mean: 55, alight_std: 0, mode: 'alight' },
+    area: 300, base_stay_prob: 0.15, exit_weight: 0,
+    train: { first_arrival_sec: 300, headway_sec: 300, jitter_sigma_sec: 10, capacity: 0,   alight_kind: 'poisson', alight_mean: 60, alight_std: 0, mode: 'alight' },
   })
 
-  // ─── 환승 통로 (유료구역 내) ──────────────────────────────────────────
+  // ─── 환승 통로 (유료구역 내) — 각 단방향 80㎡ ──────────────────────────
   // 호선1 하차 → 호선2 승차 (L1→L2)
-  const mxTR12 = mk('passage', 'mx_TR12', '환승통로(호선1→호선2)', 'mx_환승통로12', { area: 45, base_stay_prob: 0.05, exit_weight: 0 })
+  const mxTR12 = mk('passage', 'mx_TR12', '환승통로(호선1→호선2)', 'mx_환승통로12', { area: 80, base_stay_prob: 0.05, exit_weight: 0 })
   // 호선2 하차 → 호선3 승차 (L2→L3)
-  const mxTR23 = mk('passage', 'mx_TR23', '환승통로(호선2→호선3)', 'mx_환승통로23', { area: 45, base_stay_prob: 0.05, exit_weight: 0 })
+  const mxTR23 = mk('passage', 'mx_TR23', '환승통로(호선2→호선3)', 'mx_환승통로23', { area: 80, base_stay_prob: 0.05, exit_weight: 0 })
   // 호선3 하차 → 호선1 승차 (L3→L1)
-  const mxTR31 = mk('passage', 'mx_TR31', '환승통로(호선3→호선1)', 'mx_환승통로31', { area: 45, base_stay_prob: 0.05, exit_weight: 0 })
+  const mxTR31 = mk('passage', 'mx_TR31', '환승통로(호선3→호선1)', 'mx_환승통로31', { area: 80, base_stay_prob: 0.05, exit_weight: 0 })
   // 호선1 하차 → 호선3 승차 (L1→L3)
-  const mxTR13 = mk('passage', 'mx_TR13', '환승통로(호선1→호선3)', 'mx_환승통로13', { area: 45, base_stay_prob: 0.05, exit_weight: 0 })
+  const mxTR13 = mk('passage', 'mx_TR13', '환승통로(호선1→호선3)', 'mx_환승통로13', { area: 80, base_stay_prob: 0.05, exit_weight: 0 })
 
   // ═══════════════════════════════════════════════════════════════════════
   const nodes: StationNode[] = [
