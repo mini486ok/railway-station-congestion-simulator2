@@ -87,6 +87,8 @@ def gnn_bundle_by_group(graph: StationGraph) -> dict[str, str]:
 
     계약(contract):
     - adjacency: 그룹 간 멤버 노드 경로 가중치(weight)의 SUM (행-정규화 없음; GCN 소비자가 직접 정규화).
+      대각선은 그룹 내(intra-group) 링크 가중치 합만 담는다.
+      GCN의 항등 자기루프(A+I)는 소비자가 필요에 따라 직접 추가해야 한다.
     - distance: 링크 가중치(weight)로 가중평균한 거리. 총 가중치가 0이면 단순 평균으로 폴백; 링크 없으면 0.
     - travel_time: 링크 가중치(weight)로 가중평균한 이동시간, round()로 정수화. 폴백 동일.
     - group_features: 그룹별 집계 피처 CSV (아래 헤더 참조).
@@ -168,6 +170,14 @@ def gnn_bundle_by_group(graph: StationGraph) -> dict[str, str]:
     group_exit_weight_sum: list[float] = [0.0] * ng
     group_bsp_sum:         list[float] = [0.0] * ng   # base_stay_prob 합
     group_rho_max_sum:     list[float] = [0.0] * ng   # weidmann.rho_max 합
+    # 수요/서비스 피처
+    group_gen_rate_sum:          list[float] = [0.0] * ng  # 유효 people/sec 합
+    group_board_capacity_per_sec: list[float] = [0.0] * ng  # 탑승 처리 capacity/headway 합
+    group_alight_rate_per_sec:   list[float] = [0.0] * ng  # 하차 alight_mean/headway 합
+    group_headway_min:            list[float] = [0.0] * ng  # 그룹 내 최소 headway_sec
+    group_n_board:               list[int]   = [0]   * ng  # board 역할 플랫폼 수
+    group_n_alight:              list[int]   = [0]   * ng  # alight 역할 플랫폼 수
+    group_has_train_member:      list[bool]  = [False] * ng  # headway_min 계산용
 
     for node in graph.nodes:
         gi = node_to_gidx[node.id]
@@ -184,7 +194,41 @@ def gnn_bundle_by_group(graph: StationGraph) -> dict[str, str]:
         group_bsp_sum[gi]         += float(node.base_stay_prob)
         group_rho_max_sum[gi]     += float(node.weidmann.rho_max)
 
-    feat_rows = ["group,num_nodes,total_area,types,has_generation,has_train,exit_weight_sum,avg_base_stay_prob,avg_rho_max"]
+        # gen_rate_sum: 유효 people/sec
+        if node.generation is not None and node.generation.kind != "none":
+            gen = node.generation
+            if gen.kind in ("constant", "poisson"):
+                group_gen_rate_sum[gi] += float(gen.rate)
+            elif gen.kind == "batch":
+                group_gen_rate_sum[gi] += float(gen.rate) * float(gen.batch_size)
+
+        # 열차 관련 수요/서비스 피처
+        if node.train is not None:
+            tr = node.train
+            hw = float(tr.headway_sec)
+            mode = getattr(tr, "mode", "both")
+            # headway_min: 그룹 내 유효 최소값 추적
+            if hw > 0:
+                if not group_has_train_member[gi]:
+                    group_headway_min[gi] = hw
+                    group_has_train_member[gi] = True
+                else:
+                    group_headway_min[gi] = min(group_headway_min[gi], hw)
+            # board_capacity_per_sec
+            if mode in ("board", "both") and hw > 0:
+                group_board_capacity_per_sec[gi] += float(tr.capacity) / hw
+                group_n_board[gi] += 1
+            # alight_rate_per_sec
+            if mode in ("alight", "both") and hw > 0:
+                group_alight_rate_per_sec[gi] += float(tr.alight_mean) / hw
+                group_n_alight[gi] += 1
+
+    feat_rows = [
+        "group,num_nodes,total_area,types,has_generation,has_train,"
+        "exit_weight_sum,avg_base_stay_prob,avg_rho_max,"
+        "gen_rate_sum,board_capacity_per_sec,alight_rate_per_sec,"
+        "headway_min,n_board,n_alight"
+    ]
     for gi, g in enumerate(unique_groups):
         nn = group_num_nodes[gi]
         avg_bsp     = group_bsp_sum[gi]     / nn if nn > 0 else 0.0
@@ -199,6 +243,12 @@ def gnn_bundle_by_group(graph: StationGraph) -> dict[str, str]:
             str(group_exit_weight_sum[gi]),
             str(avg_bsp),
             str(avg_rho_max),
+            str(group_gen_rate_sum[gi]),
+            str(group_board_capacity_per_sec[gi]),
+            str(group_alight_rate_per_sec[gi]),
+            str(group_headway_min[gi]),
+            str(group_n_board[gi]),
+            str(group_n_alight[gi]),
         ]))
 
     return {
