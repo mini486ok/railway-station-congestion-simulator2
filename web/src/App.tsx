@@ -55,6 +55,8 @@ export default function App() {
   const [view, setView] = useState<'sim' | 'usage' | 'output'>('sim')
   const [hidden, setHidden] = useState<string[]>(listHidden)
   const [loadFeedback, setLoadFeedback] = useState<string>('')
+  const [tmplMenuOpen, setTmplMenuOpen] = useState(false)
+  const tmplMenuRef = useRef<HTMLDivElement>(null)
   const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sim = useSimulation()
 
@@ -67,6 +69,18 @@ export default function App() {
   useEffect(() => () => {
     if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current)
   }, [])
+
+  // Close template management menu on outside click
+  useEffect(() => {
+    if (!tmplMenuOpen) return
+    const handler = (e: MouseEvent) => {
+      if (tmplMenuRef.current && !tmplMenuRef.current.contains(e.target as Node)) {
+        setTmplMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [tmplMenuOpen])
 
   // Keyboard shortcuts: Ctrl+Z, Ctrl+Y, Ctrl+Shift+Z, Ctrl+C, Ctrl+V
   useEffect(() => {
@@ -179,6 +193,7 @@ export default function App() {
               <select
                 value={selectedValue}
                 title={selectedValue}
+                className={nodes.length === 0 ? 'template-select-pulse' : ''}
                 style={{ minWidth: 280 }}
                 onChange={(e) => {
                   const val = e.target.value
@@ -221,61 +236,83 @@ export default function App() {
                 <span style={{ fontSize: '0.8em', color: '#336', whiteSpace: 'nowrap' }}>{loadFeedback}</span>
               )}
 
-              {/* 이 예제 숨기기 */}
-              <button
-                disabled={!isBuiltinSelected}
-                onClick={() => {
-                  if (selectedBuiltinName) {
-                    const next = hideBuiltin(selectedBuiltinName)
-                    setHidden(next)
-                    setSelectedValue('')
-                  }
-                }}
-                title="현재 선택한 기본 예제를 드롭다운에서 숨기기"
-              >
-                이 예제 숨기기
-              </button>
-
-              {/* 숨긴 예제 복원 (숨긴 예제 있을 때만 노출) */}
-              {hidden.length > 0 && (
+              {/* Item 4: ⋯ 템플릿 관리 dropdown — advanced template actions */}
+              <div ref={tmplMenuRef} style={{ position: 'relative' }}>
                 <button
-                  onClick={() => {
-                    const next = restoreHidden()
-                    setHidden(next)
-                  }}
-                  title="숨긴 기본 예제를 모두 복원"
+                  onClick={() => setTmplMenuOpen((v) => !v)}
+                  title="템플릿 관리 메뉴 열기/닫기"
+                  style={{ whiteSpace: 'nowrap' }}
                 >
-                  숨긴 예제 복원
+                  ⋯ 템플릿 관리
                 </button>
-              )}
-
-              <button
-                onClick={() => {
-                  const name = prompt('템플릿 이름을 입력하세요')
-                  if (name && name.trim()) {
-                    const trimmed = name.trim()
-                    setUserTemplates(saveUserTemplate(trimmed, toProject()))
-                    setSelectedValue(`user:${trimmed}`)
-                  }
-                }}
-                title="현재 구성을 템플릿으로 저장"
-              >
-                현재 구성을 템플릿으로 저장
-              </button>
-              {selectedValue.startsWith('user:') && (
-                <button
-                  onClick={() => {
-                    const name = selectedValue.slice('user:'.length)
-                    if (confirm(`"${name}" 템플릿을 삭제하시겠습니까?`)) {
-                      setUserTemplates(deleteUserTemplate(name))
-                      setSelectedValue('')
-                    }
-                  }}
-                  title="선택한 내 템플릿 삭제"
-                >
-                  ✕
-                </button>
-              )}
+                {tmplMenuOpen && (
+                  <div style={{
+                    position: 'absolute', top: '100%', left: 0, zIndex: 200,
+                    background: '#fff', border: '1px solid #aac', borderRadius: 6,
+                    boxShadow: '0 4px 14px rgba(0,0,0,.18)', minWidth: 200, padding: '6px 0',
+                  }}>
+                    <button
+                      disabled={!isBuiltinSelected}
+                      style={{ display: 'block', width: '100%', textAlign: 'left', borderRadius: 0, border: 'none', background: 'none', padding: '7px 14px' }}
+                      onClick={() => {
+                        if (selectedBuiltinName) {
+                          const next = hideBuiltin(selectedBuiltinName)
+                          setHidden(next)
+                          setSelectedValue('')
+                          setTmplMenuOpen(false)
+                        }
+                      }}
+                      title="현재 선택한 기본 예제를 드롭다운에서 숨기기"
+                    >
+                      이 예제 숨기기
+                    </button>
+                    {hidden.length > 0 && (
+                      <button
+                        style={{ display: 'block', width: '100%', textAlign: 'left', borderRadius: 0, border: 'none', background: 'none', padding: '7px 14px' }}
+                        onClick={() => {
+                          const next = restoreHidden()
+                          setHidden(next)
+                          setTmplMenuOpen(false)
+                        }}
+                        title="숨긴 기본 예제를 모두 복원"
+                      >
+                        숨긴 예제 복원
+                      </button>
+                    )}
+                    <button
+                      style={{ display: 'block', width: '100%', textAlign: 'left', borderRadius: 0, border: 'none', background: 'none', padding: '7px 14px' }}
+                      onClick={() => {
+                        const name = prompt('템플릿 이름을 입력하세요')
+                        if (name && name.trim()) {
+                          const trimmed = name.trim()
+                          setUserTemplates(saveUserTemplate(trimmed, toProject()))
+                          setSelectedValue(`user:${trimmed}`)
+                        }
+                        setTmplMenuOpen(false)
+                      }}
+                      title="현재 구성을 템플릿으로 저장"
+                    >
+                      현재 구성을 템플릿으로 저장
+                    </button>
+                    {selectedValue.startsWith('user:') && (
+                      <button
+                        style={{ display: 'block', width: '100%', textAlign: 'left', borderRadius: 0, border: 'none', background: '#fdeaea', color: '#911', padding: '7px 14px' }}
+                        onClick={() => {
+                          const name = selectedValue.slice('user:'.length)
+                          if (confirm(`"${name}" 템플릿을 삭제하시겠습니까?`)) {
+                            setUserTemplates(deleteUserTemplate(name))
+                            setSelectedValue('')
+                          }
+                          setTmplMenuOpen(false)
+                        }}
+                        title="선택한 내 템플릿 삭제"
+                      >
+                        ✕ 내 템플릿 삭제
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
           {/* FIX K: tab ARIA */}
@@ -312,18 +349,20 @@ export default function App() {
         <div role="tabpanel" aria-labelledby={`tab-${view}`}>
         {view === 'sim' && (
           <div className="layout" style={{ gridTemplateColumns }}>
-            {/* LEFT column */}
+            {/* LEFT column — collapse arrow points LEFT (toward left edge); expand shows ▶ 펼치기 */}
             <section className={`left panel-col${collapsed.left ? ' col-collapsed' : ''}`}>
               {collapsed.left ? (
                 <div className="col-strip">
-                  <button className="col-toggle-btn" title="그래프 편집기 열기" onClick={() => toggleCollapse('left')}>▶</button>
-                  <span className="col-rotated-label">그래프 편집기</span>
+                  <button className="col-expand-btn" title="패널 펼치기" onClick={() => toggleCollapse('left')}>
+                    ▶ 펼치기
+                  </button>
+                  <span className="col-rotated-label">좌측 · 그래프 편집기</span>
                 </div>
               ) : (
                 <>
                   <div className="col-header">
                     <span className="col-title">그래프 편집기</span>
-                    <button className="col-toggle-btn" title="그래프 편집기 접기" onClick={() => toggleCollapse('left')}>◀</button>
+                    <button className="col-toggle-btn" title="패널 접기" onClick={() => toggleCollapse('left')}>◀</button>
                   </div>
                   <NodePalette onAdded={(id) => { setSelNode(id); setSelLink(null) }} />
                   <GraphEditor
@@ -335,18 +374,20 @@ export default function App() {
               )}
             </section>
 
-            {/* CENTER column */}
+            {/* CENTER column — collapse arrow points LEFT (toward left edge); expand shows ▶ 펼치기 */}
             <section className={`center panel-col${collapsed.center ? ' col-collapsed' : ''}`}>
               {collapsed.center ? (
                 <div className="col-strip">
-                  <button className="col-toggle-btn" title="시뮬레이션 열기" onClick={() => toggleCollapse('center')}>▶</button>
-                  <span className="col-rotated-label">시뮬레이션</span>
+                  <button className="col-expand-btn" title="패널 펼치기" onClick={() => toggleCollapse('center')}>
+                    ▶ 펼치기
+                  </button>
+                  <span className="col-rotated-label">가운데 · 시뮬레이션</span>
                 </div>
               ) : (
                 <>
                   <div className="col-header">
                     <span className="col-title">시뮬레이션</span>
-                    <button className="col-toggle-btn" title="시뮬레이션 접기" onClick={() => toggleCollapse('center')}>◀</button>
+                    <button className="col-toggle-btn" title="패널 접기" onClick={() => toggleCollapse('center')}>◀</button>
                   </div>
                   <SimControls sim={sim} />
                   <Dashboard sim={sim} />
@@ -354,18 +395,20 @@ export default function App() {
               )}
             </section>
 
-            {/* RIGHT column */}
+            {/* RIGHT column — collapse arrow points RIGHT (toward right edge); expand shows ◀ 펼치기 */}
             <section className={`right panel-col${collapsed.right ? ' col-collapsed' : ''}`}>
               {collapsed.right ? (
                 <div className="col-strip">
-                  <button className="col-toggle-btn" title="속성 패널 열기" onClick={() => toggleCollapse('right')}>◀</button>
-                  <span className="col-rotated-label">속성 · 내보내기</span>
+                  <button className="col-expand-btn" title="패널 펼치기" onClick={() => toggleCollapse('right')}>
+                    ◀ 펼치기
+                  </button>
+                  <span className="col-rotated-label">우측 · 속성·내보내기</span>
                 </div>
               ) : (
                 <>
                   <div className="col-header">
                     <span className="col-title">속성 · 내보내기</span>
-                    <button className="col-toggle-btn" title="속성 패널 접기" onClick={() => toggleCollapse('right')}>▶</button>
+                    <button className="col-toggle-btn" title="패널 접기" onClick={() => toggleCollapse('right')}>▶</button>
                   </div>
                   <ValidationBanner />
                   {selNode && <NodeInspector nodeId={selNode} />}

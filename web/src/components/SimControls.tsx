@@ -45,11 +45,20 @@ export function SimControls({ sim }: { sim: ReturnType<typeof useSimulation> }) 
         </label>
       </div>
       <div className="row">
-        <button onClick={() => void sim.play()} disabled={isLoading || sim.status === 'running'}>▶ 재생</button>
+        <button
+          onClick={() => void sim.play()}
+          disabled={isLoading || sim.status === 'running'}
+          title="단계별 애니메이션으로 천천히 진행합니다(느림)"
+        >▶ 재생</button>
         <button onClick={() => sim.pause()} disabled={sim.status !== 'running'}>⏸ 일시정지</button>
         <button onClick={() => void sim.stepOnce()} disabled={isLoading || sim.status === 'running'}>⏭ 한 스텝</button>
         <button onClick={() => void sim.reset()} disabled={isLoading}>⟲ 리셋</button>
-        <button onClick={() => void sim.runInstant()} disabled={isLoading}>⚡ 즉시 실행</button>
+        <button
+          onClick={() => void sim.runInstant()}
+          disabled={isLoading}
+          title="전체 결과를 즉시 계산합니다(권장)"
+          style={{ fontWeight: 700, borderColor: '#2a6', background: '#d6f0d6' }}
+        >⚡ 즉시 실행 <span style={{ fontSize: '0.78em', color: '#196' }}>(빠름·권장)</span></button>
       </div>
       {isLoading ? (
         <div className="row">

@@ -105,15 +105,21 @@ export function ExportPanel({ sim }: { sim: ReturnType<typeof useSimulation> }) 
           시뮬레이션 실행 중… 잠시만 기다려 주세요
         </div>
       )}
-      <div className="row">
-        <button onClick={() => void exportCsv()} disabled={busy}>혼잡도 CSV</button>
-        <button onClick={() => void exportGroupCsv()} disabled={busy}>그룹 혼잡도 CSV</button>
-        <button onClick={() => void exportGnn()} disabled={busy}>GNN 번들(노드, zip)</button>
-        <button onClick={() => void exportGnnGroup()} disabled={busy}>GNN 번들(그룹, zip)</button>
-        <button onClick={saveConfig}>설정 JSON 저장</button>
-        <button onClick={() => fileRef.current?.click()}>설정 불러오기</button>
-        <input ref={fileRef} type="file" accept="application/json"
-          style={{ display: 'none' }} onChange={onLoadFile} />
+      <div style={{ marginTop: 6 }}>
+        <div style={{ fontSize: '11px', fontWeight: 600, color: '#446', marginBottom: 4 }}>기본 내보내기</div>
+        <div className="row">
+          <button onClick={() => void exportCsv()} disabled={busy}>혼잡도 CSV</button>
+          <button onClick={saveConfig}>설정 JSON 저장</button>
+          <button onClick={() => fileRef.current?.click()}>설정 불러오기</button>
+          <input ref={fileRef} type="file" accept="application/json"
+            style={{ display: 'none' }} onChange={onLoadFile} />
+        </div>
+        <div style={{ fontSize: '11px', fontWeight: 600, color: '#446', marginTop: 6, marginBottom: 4 }}>GNN·그룹 (고급)</div>
+        <div className="row">
+          <button onClick={() => void exportGroupCsv()} disabled={busy}>그룹 혼잡도 CSV</button>
+          <button onClick={() => void exportGnn()} disabled={busy}>GNN 번들(노드, zip)</button>
+          <button onClick={() => void exportGnnGroup()} disabled={busy}>GNN 번들(그룹, zip)</button>
+        </div>
       </div>
     </div>
   )

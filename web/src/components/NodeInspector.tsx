@@ -90,12 +90,15 @@ export function NodeInspector({ nodeId }: { nodeId: string }) {
           onChange={(e) => updateNode(node.id, { congestion_enabled: e.target.checked })}
         />
       </label>
-      <fieldset>
-        <legend>Weidmann</legend>
-        {numField('자유속도 v_free', w.v_free, (v) => updateNode(node.id, { weidmann: { ...w, v_free: v } }), 'v_free')}
-        {numField('임계밀도 ρ_max', w.rho_max, (v) => updateNode(node.id, { weidmann: { ...w, rho_max: v } }), 'rho_max')}
-        {numField('γ', w.gamma, (v) => updateNode(node.id, { weidmann: { ...w, gamma: v } }), 'gamma')}
-      </fieldset>
+      <details>
+        <summary style={{ cursor: 'pointer', fontSize: '12px', fontWeight: 600, color: '#446', padding: '4px 0' }}>고급: Weidmann(혼잡 동적 체류) 파라미터</summary>
+        <fieldset>
+          <legend>Weidmann</legend>
+          {numField('자유속도 v_free', w.v_free, (v) => updateNode(node.id, { weidmann: { ...w, v_free: v } }), 'v_free')}
+          {numField('임계밀도 ρ_max', w.rho_max, (v) => updateNode(node.id, { weidmann: { ...w, rho_max: v } }), 'rho_max')}
+          {numField('γ', w.gamma, (v) => updateNode(node.id, { weidmann: { ...w, gamma: v } }), 'gamma')}
+        </fieldset>
+      </details>
 
       {node.type === 'elevator' && (
         <fieldset>
@@ -146,6 +149,12 @@ export function NodeInspector({ nodeId }: { nodeId: string }) {
               </label>
               {Array.isArray(gen.profile) && gen.profile.length > 0 && (
                 <div className="profile-editor">
+                  {/* Column header */}
+                  <div className="profile-row profile-header" style={{ fontWeight: 600, fontSize: 11, color: '#446' }}>
+                    <span>시각(초)</span>
+                    <span>발생률</span>
+                    <span></span>
+                  </div>
                   {gen.profile.map((row, i) => (
                     <div key={i} className="profile-row">
                       <input
@@ -167,9 +176,12 @@ export function NodeInspector({ nodeId }: { nodeId: string }) {
                         }}
                       />
                       <button
+                        disabled={gen.profile!.length <= 1}
+                        title={gen.profile!.length <= 1 ? '마지막 행은 삭제할 수 없습니다. 비활성화하려면 체크박스를 해제하세요.' : '이 행 삭제'}
                         onClick={() => {
+                          if (gen.profile!.length <= 1) return
                           const newProfile = gen.profile!.filter((_, j) => j !== i)
-                          updateNode(node.id, { generation: { ...gen, profile: newProfile.length > 0 ? newProfile : null } })
+                          updateNode(node.id, { generation: { ...gen, profile: newProfile } })
                         }}
                       >삭제</button>
                     </div>
