@@ -358,10 +358,10 @@ export default function App() {
             <section className={`left panel-col${collapsed.left ? ' col-collapsed' : ''}`}>
               {collapsed.left ? (
                 <div className="col-strip">
-                  <button className="col-expand-btn" title="패널 펼치기" onClick={() => toggleCollapse('left')}>
-                    ▶ 펼치기
+                  <button className="col-expand-btn" title="펼치기 (그래프 편집기)" aria-label="좌측 패널 펼치기" onClick={() => toggleCollapse('left')}>
+                    ▶
                   </button>
-                  <span className="col-rotated-label">좌측 · 그래프 편집기</span>
+                  <span className="col-rotated-label" title="펼치기" onClick={() => toggleCollapse('left')}>그래프 편집기</span>
                 </div>
               ) : (
                 <>
@@ -383,10 +383,10 @@ export default function App() {
             <section className={`center panel-col${collapsed.center ? ' col-collapsed' : ''}`}>
               {collapsed.center ? (
                 <div className="col-strip">
-                  <button className="col-expand-btn" title="패널 펼치기" onClick={() => toggleCollapse('center')}>
-                    ▶ 펼치기
+                  <button className="col-expand-btn" title="펼치기 (시뮬레이션)" aria-label="가운데 패널 펼치기" onClick={() => toggleCollapse('center')}>
+                    ▶
                   </button>
-                  <span className="col-rotated-label">가운데 · 시뮬레이션</span>
+                  <span className="col-rotated-label" title="펼치기" onClick={() => toggleCollapse('center')}>시뮬레이션</span>
                 </div>
               ) : (
                 <>
@@ -404,10 +404,10 @@ export default function App() {
             <section className={`right panel-col${collapsed.right ? ' col-collapsed' : ''}`}>
               {collapsed.right ? (
                 <div className="col-strip">
-                  <button className="col-expand-btn" title="패널 펼치기" onClick={() => toggleCollapse('right')}>
-                    ◀ 펼치기
+                  <button className="col-expand-btn" title="펼치기 (속성·내보내기)" aria-label="우측 패널 펼치기" onClick={() => toggleCollapse('right')}>
+                    ◀
                   </button>
-                  <span className="col-rotated-label">우측 · 속성·내보내기</span>
+                  <span className="col-rotated-label" title="펼치기" onClick={() => toggleCollapse('right')}>속성 · 내보내기</span>
                 </div>
               ) : (
                 <>
