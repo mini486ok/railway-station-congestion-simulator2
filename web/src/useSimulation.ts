@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createSimClient, type SimClient, type SimClientHandle, APP_BASE } from './worker/client'
 import { useStore } from './store'
-import { validateGraph } from './validation'
+import { validateGraph, validateConfig } from './validation'
 import type { Snapshot } from './types'
 
 export function computeProgress(t: number, numSteps: number): number {
@@ -83,7 +83,10 @@ export function useSimulation(opts: Options = {}) {
   const prepare = useCallback(async () => {
     setError(null)
     const project = useStore.getState().toProject()
-    const errs = validateGraph(project.graph)
+    const errs = [
+      ...validateGraph(project.graph),
+      ...validateConfig(project.graph, project.config),
+    ]
     if (errs.length) { setError(errs.join('\n')); setStatus('error'); return false }
     try {
       await ensureInit()

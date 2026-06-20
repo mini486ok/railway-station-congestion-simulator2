@@ -6,6 +6,11 @@ import { makeNode, makeLink, defaultSimConfig } from './defaults'
 
 const STORAGE_KEY = 'railway-sim-project-v1'
 const HISTORY_CAP = 50
+const COALESCE_MS = 600
+
+// 모듈 수준 합치기 상태 (반응형 불필요)
+let lastEditKey: string | null = null
+let lastEditTime = 0
 
 interface HistorySnapshot {
   nodes: StationNode[]
@@ -79,6 +84,23 @@ function pushHistory(st: State): Pick<State, 'past' | 'future'> {
   return { past, future: [] }
 }
 
+// 합치기 헬퍼: key가 600ms 이내 동일하면 스냅샷 생략, 아니면 pushHistory
+function maybeHistory(st: State, key: string): Pick<State, 'past' | 'future'> | Record<string, never> {
+  const now = Date.now()
+  if (lastEditKey === key && now - lastEditTime < COALESCE_MS) {
+    // 같은 키 + 짧은 시간 → 스냅샷 생략 (future도 유지)
+    return {}
+  }
+  lastEditKey = key
+  lastEditTime = now
+  return pushHistory(st)
+}
+
+function resetCoalesce() {
+  lastEditKey = null
+  lastEditTime = 0
+}
+
 export const useStore = create<State>((set, get) => ({
   ...loadInitial(),
   version: 0,
@@ -96,6 +118,7 @@ export const useStore = create<State>((set, get) => ({
   canRedo: () => get().future.length > 0,
 
   undo: () => {
+    resetCoalesce()
     const st = get()
     if (st.past.length === 0) return
     const prev = st.past[st.past.length - 1]
@@ -114,6 +137,7 @@ export const useStore = create<State>((set, get) => ({
   },
 
   redo: () => {
+    resetCoalesce()
     const st = get()
     if (st.future.length === 0) return
     const next = st.future[0]
@@ -133,6 +157,7 @@ export const useStore = create<State>((set, get) => ({
   },
 
   addNode: (type, position) => {
+    resetCoalesce()
     const id = get().nextNodeId()
     const node = makeNode(type, id)
     const pos = position ?? { x: 100 + get().nodes.length * 40, y: 100 }
@@ -147,6 +172,7 @@ export const useStore = create<State>((set, get) => ({
   },
 
   addNodeFromData: (data, pos) => {
+    resetCoalesce()
     const id = get().nextNodeId()
     const position = pos ?? { x: (get().positions[data.id]?.x ?? 100) + 40, y: (get().positions[data.id]?.y ?? 100) + 40 }
     const node: StationNode = {
@@ -166,7 +192,7 @@ export const useStore = create<State>((set, get) => ({
 
   updateNode: (id, patch) => {
     set((st) => ({
-      ...pushHistory(st),
+      ...maybeHistory(st, `node:${id}`),
       nodes: st.nodes.map((n) => (n.id === id ? { ...n, ...patch } : n)),
       version: st.version + 1,
     }))
@@ -174,6 +200,7 @@ export const useStore = create<State>((set, get) => ({
   },
 
   removeNode: (id) => {
+    resetCoalesce()
     set((st) => {
       const positions = { ...st.positions }
       delete positions[id]
@@ -189,6 +216,7 @@ export const useStore = create<State>((set, get) => ({
   },
 
   addLink: (source, target) => {
+    resetCoalesce()
     if (source === target) return
     if (get().links.some((l) => l.source === source && l.target === target)) return
     set((st) => ({
@@ -201,7 +229,7 @@ export const useStore = create<State>((set, get) => ({
 
   updateLink: (index, patch) => {
     set((st) => ({
-      ...pushHistory(st),
+      ...maybeHistory(st, `link:${index}`),
       links: st.links.map((l, i) => (i === index ? { ...l, ...patch } : l)),
       version: st.version + 1,
     }))
@@ -209,6 +237,7 @@ export const useStore = create<State>((set, get) => ({
   },
 
   removeLink: (index) => {
+    resetCoalesce()
     set((st) => ({
       ...pushHistory(st),
       links: st.links.filter((_, i) => i !== index),
@@ -219,7 +248,7 @@ export const useStore = create<State>((set, get) => ({
 
   setConfig: (patch) => {
     set((st) => ({
-      ...pushHistory(st),
+      ...maybeHistory(st, 'config'),
       config: { ...st.config, ...patch },
       version: st.version + 1,
     }))
@@ -233,6 +262,7 @@ export const useStore = create<State>((set, get) => ({
   },
 
   normalizeOutWeights: (nodeId) => {
+    resetCoalesce()
     const node = get().nodes.find((n) => n.id === nodeId)
     const exitW = node?.exit_weight ?? 0
     const outIdx = get().links
@@ -259,6 +289,7 @@ export const useStore = create<State>((set, get) => ({
   },
 
   loadProject: (p) => {
+    resetCoalesce()
     set((st) => ({
       ...pushHistory(st),
       nodes: p.graph?.nodes ?? [],

@@ -1,4 +1,4 @@
-import type { StationGraphJSON, StationNode } from './types'
+import type { StationGraphJSON, StationNode, SimConfig } from './types'
 
 const TOL = 1e-6
 const VALID_GEN_KINDS = new Set(['constant', 'poisson', 'batch', 'none'])
@@ -172,5 +172,20 @@ export function validateGraph(graph: StationGraphJSON): string[] {
     }
   }
 
+  return errors
+}
+
+// 프로젝트/설정 레벨 검증 (dt, duration, headway vs dt)
+export function validateConfig(graph: StationGraphJSON, config: SimConfig): string[] {
+  const errors: string[] = []
+  if (config.dt_seconds <= 0) errors.push('dt_seconds는 0보다 커야 합니다')
+  if (config.duration_seconds <= 0) errors.push('duration_seconds는 0보다 커야 합니다')
+  for (const n of graph.nodes) {
+    if (n.type === 'platform' && n.train) {
+      if (n.train.headway_sec > 0 && n.train.headway_sec < config.dt_seconds) {
+        errors.push(`노드 ${n.id}: 배차간격(headway)이 Δt(dt_seconds)보다 작아 열차가 누락됩니다`)
+      }
+    }
+  }
   return errors
 }

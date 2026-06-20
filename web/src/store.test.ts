@@ -144,6 +144,74 @@ describe('undo / redo', () => {
   })
 })
 
+describe('undo coalescing', () => {
+  it('5 rapid updateNode calls on same id → past grows by 1 (not 5)', () => {
+    useStore.setState({ nodes: [], links: [], positions: {}, past: [], future: [] })
+    const s = useStore.getState()
+    const id = s.addNode('entrance')
+    const pastBefore = useStore.getState().past.length
+
+    // All 5 calls happen in tight loop (<600ms) on the same id
+    for (let i = 0; i < 5; i++) {
+      s.updateNode(id, { name: `이름${i}` })
+    }
+
+    const pastAfter = useStore.getState().past.length
+    // Should grow by 1 (first call pushes snapshot, rest coalesce)
+    expect(pastAfter - pastBefore).toBe(1)
+  })
+
+  it('undo after 5 rapid updateNode calls reverts all 5 at once', () => {
+    useStore.setState({ nodes: [], links: [], positions: {}, past: [], future: [] })
+    const s = useStore.getState()
+    const id = s.addNode('entrance')
+    s.updateNode(id, { name: '원래이름' })
+    // Force a new coalesce group by resetting (simulate structural op)
+    useStore.getState().addLink // just reference; real reset via addNode on other node
+    // Use a direct setState to reset coalesce (module-level vars)
+    // Instead: call undo/redo to reset coalesce, then set name again
+    useStore.getState().undo() // undo '원래이름' → back to addNode state
+    useStore.getState().redo() // redo → '원래이름' is back
+    const pastBefore = useStore.getState().past.length
+
+    // Now do 5 rapid changes (new coalesce group because redo reset coalesce)
+    for (let i = 0; i < 5; i++) {
+      s.updateNode(id, { name: `이름${i}` })
+    }
+
+    const nameAfter = useStore.getState().nodes.find((n) => n.id === id)?.name
+    expect(nameAfter).toBe('이름4') // last value applied
+
+    // Undo once → reverts all 5 back to '원래이름'
+    useStore.getState().undo()
+    const nameReverted = useStore.getState().nodes.find((n) => n.id === id)?.name
+    expect(nameReverted).toBe('원래이름')
+    expect(useStore.getState().past.length).toBe(pastBefore)
+  })
+
+  it('structural op (addNode) resets coalesce: next updateNode starts new group', () => {
+    useStore.setState({ nodes: [], links: [], positions: {}, past: [], future: [] })
+    const s = useStore.getState()
+    const id = s.addNode('entrance')
+
+    // First updateNode: pushes snapshot (new group)
+    s.updateNode(id, { name: 'A' })
+    const after1 = useStore.getState().past.length
+
+    // Another structural op resets coalesce
+    s.addNode('passage')
+    const afterStructural = useStore.getState().past.length
+
+    // Next updateNode should push a NEW snapshot (new group after structural)
+    s.updateNode(id, { name: 'B' })
+    const after2 = useStore.getState().past.length
+
+    // structural op pushed +1, updateNode after reset pushed +1
+    expect(after2 - afterStructural).toBe(1)
+    expect(afterStructural - after1).toBe(1)
+  })
+})
+
 describe('addNodeFromData', () => {
   it('creates a new id and copies all attributes with (복사) suffix', () => {
     useStore.setState({ nodes: [], links: [], positions: {}, past: [], future: [] })
