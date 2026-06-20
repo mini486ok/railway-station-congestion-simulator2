@@ -88,6 +88,9 @@ export function ExportPanel({ sim }: { sim: ReturnType<typeof useSimulation> }) 
           alert('유효한 설정 파일이 아닙니다(graph.nodes/links 누락).')
           return
         }
+        if (useStore.getState().nodes.length > 0) {
+          if (!window.confirm('현재 구성을 덮어씁니다. 계속할까요?')) return
+        }
         loadProject(project)
       } catch (err) { alert(`불러오기 실패: ${err}`) }
     }
@@ -99,10 +102,10 @@ export function ExportPanel({ sim }: { sim: ReturnType<typeof useSimulation> }) 
   return (
     <div className="export-panel">
       <strong>내보내기 / 설정</strong>
-      <div style={{ fontSize: '0.8em', color: '#666', margin: '2px 0 4px' }}>내보내기 시 시뮬레이션이 자동 실행됩니다(결과가 없으면).</div>
+      <div style={{ fontSize: '0.8em', color: '#666', margin: '2px 0 4px' }}>내보내기 시 결과가 없으면 시뮬레이션을 자동으로 실행한 뒤 저장합니다.</div>
       {sim.status === 'running' && (
-        <div style={{ fontSize: '0.85em', color: '#664400', margin: '4px 0', fontStyle: 'italic' }}>
-          시뮬레이션 실행 중… 잠시만 기다려 주세요
+        <div style={{ fontSize: '0.88em', color: '#664400', background: '#fff8e8', border: '1px solid #e6c060', borderRadius: 4, padding: '5px 8px', margin: '4px 0', fontWeight: 600 }}>
+          ⏳ 시뮬레이션 실행 후 저장합니다… 잠시만 기다려 주세요
         </div>
       )}
       <div style={{ marginTop: 6 }}>

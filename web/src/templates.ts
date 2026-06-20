@@ -245,7 +245,8 @@ function transferStation(): ProjectConfig {
   const P1_alight = makeNode('platform', 'P1_alight')
   P1_alight.name = '1호선 승강장(하차)'; P1_alight.area = 100; P1_alight.base_stay_prob = 0.15
   P1_alight.exit_weight = 0; P1_alight.group = '승강장1'
-  // alight_kind='normal' with alight_std>0 to demonstrate variable alighting in deterministic mode (item C)
+  // alight_kind='normal': normal-distributed alight variation is active only in stochastic mode;
+  // in deterministic mode alight_mean is used exactly.
   P1_alight.train = {
     first_arrival_sec: 60, headway_sec: 300, jitter_sigma_sec: 5,
     capacity: 0, alight_kind: 'normal', alight_mean: 60, alight_std: 15,
@@ -952,16 +953,16 @@ function initialCongestionStation(): ProjectConfig {
 // ──────────────────────────────────────────────────────────────────────────────
 function megaComplexStation(): ProjectConfig {
   // ═══════════════════════════════════════════════════════════════════════
-  // 용량 계획:
+  // 용량 계획 (R4-R2 재조정):
   //   호선1 상행(B2): cap 200, hw 300s → 0.667/s
   //   호선1 하행(B2): cap 200, hw 300s → 0.667/s
   //   호선2 상행(B3): cap 180, hw 240s → 0.750/s
   //   호선2 하행(B3): cap 180, hw 240s → 0.750/s
-  //   호선3 상행(B2): cap 160, hw 360s → 0.444/s
-  //   호선3 하행(B3): cap 160, hw 360s → 0.444/s
-  //   합계 boarding throughput ≈ 3.722/s
-  //   목표 입구 유입 ≈ 1.0× = 3.72/s → 10 입구에 분산 (1.1배 이내 유지)
-  //   (출퇴근 첨두 profile 적용 입구7은 baseRate=0.4로 평균 산정, 최대배율×0.4≈0.4)
+  //   호선3 상행(B2): cap 200, hw 300s → 0.667/s  ← 용량↑ hw단축 (was 160/360=0.444)
+  //   호선3 하행(B3): cap 200, hw 300s → 0.667/s  ← 용량↑ hw단축 (was 160/360=0.444)
+  //   합계 boarding throughput ≈ 4.168/s
+  //   입구 총 유입 ≈ 3.46/s(정상) / ~4.0/s(첨두) → 목표 ≤ 0.85× per platform
+  //   환승비율: L1→L2/L3(각 10%/10%), L2→L3(15%↓ was 20%), L3→L1(20%/25%)
   //   duration=7200s → profile 최대 breakpoint 5400s < 7200s (OK)
   // ═══════════════════════════════════════════════════════════════════════
 
@@ -1072,14 +1073,14 @@ function megaComplexStation(): ProjectConfig {
     area: 150, base_stay_prob: 0.15, exit_weight: 0,
     train: { first_arrival_sec: 150, headway_sec: 300, jitter_sigma_sec: 8, capacity: 0,   alight_kind: 'poisson', alight_mean: 70, alight_std: 0, mode: 'alight' },
   })
-  // 호선3 상행 (B2)
+  // 호선3 상행 (B2) — cap↑200/hw↓300s: 0.667/s (was 160/360=0.444/s; raised to avoid L3 backlog)
   const mxL3upB = mk('platform', 'mx_L3upB', '호선3 상행 승강장(승차)', 'mx_L3상행',   {
     area: 130, base_stay_prob: 1.0, exit_weight: 0,
-    train: { first_arrival_sec: 120, headway_sec: 360, jitter_sigma_sec: 10,capacity: 160, alight_kind: 'constant', alight_mean: 0,  alight_std: 0, mode: 'board' },
+    train: { first_arrival_sec: 120, headway_sec: 300, jitter_sigma_sec: 10,capacity: 200, alight_kind: 'constant', alight_mean: 0,  alight_std: 0, mode: 'board' },
   })
   const mxL3upA = mk('platform', 'mx_L3upA', '호선3 상행 승강장(하차)', 'mx_L3상행',   {
     area: 130, base_stay_prob: 0.15, exit_weight: 0,
-    train: { first_arrival_sec: 120, headway_sec: 360, jitter_sigma_sec: 10,capacity: 0,   alight_kind: 'poisson', alight_mean: 55, alight_std: 0, mode: 'alight' },
+    train: { first_arrival_sec: 120, headway_sec: 300, jitter_sigma_sec: 10,capacity: 0,   alight_kind: 'poisson', alight_mean: 55, alight_std: 0, mode: 'alight' },
   })
 
   // ─── B3 플랫폼: 호선2 상행/하행 + 호선3 하행 ─────────────────────────
@@ -1101,14 +1102,14 @@ function megaComplexStation(): ProjectConfig {
     area: 150, base_stay_prob: 0.15, exit_weight: 0,
     train: { first_arrival_sec: 210, headway_sec: 240, jitter_sigma_sec: 8, capacity: 0,   alight_kind: 'poisson', alight_mean: 60, alight_std: 0, mode: 'alight' },
   })
-  // 호선3 하행 (B3)
+  // 호선3 하행 (B3) — cap↑200/hw↓300s: 0.667/s (was 160/360=0.444/s; raised to avoid L3 backlog)
   const mxL3dnB = mk('platform', 'mx_L3dnB', '호선3 하행 승강장(승차)', 'mx_L3하행',   {
     area: 130, base_stay_prob: 1.0, exit_weight: 0,
-    train: { first_arrival_sec: 300, headway_sec: 360, jitter_sigma_sec: 10,capacity: 160, alight_kind: 'constant', alight_mean: 0,  alight_std: 0, mode: 'board' },
+    train: { first_arrival_sec: 300, headway_sec: 300, jitter_sigma_sec: 10,capacity: 200, alight_kind: 'constant', alight_mean: 0,  alight_std: 0, mode: 'board' },
   })
   const mxL3dnA = mk('platform', 'mx_L3dnA', '호선3 하행 승강장(하차)', 'mx_L3하행',   {
     area: 130, base_stay_prob: 0.15, exit_weight: 0,
-    train: { first_arrival_sec: 300, headway_sec: 360, jitter_sigma_sec: 10,capacity: 0,   alight_kind: 'poisson', alight_mean: 55, alight_std: 0, mode: 'alight' },
+    train: { first_arrival_sec: 300, headway_sec: 300, jitter_sigma_sec: 10,capacity: 0,   alight_kind: 'poisson', alight_mean: 55, alight_std: 0, mode: 'alight' },
   })
 
   // ─── 환승 통로 (유료구역 내) ──────────────────────────────────────────
@@ -1273,17 +1274,17 @@ function megaComplexStation(): ProjectConfig {
     lnk('mx_L3upA', 'mx_TR31',   45, 5.7), // →호선1 (20%)
 
     // ── B3 플랫폼(하차) → B3 수직상행(70%) + 환승통로(30%) ──────────────
-    // 호선2 상행 하차: 80% 출구방향, 20% L3환승
+    // 호선2 상행 하차: 85% 출구방향, 15% L3환승 (was 80%/20%; lowered to reduce L3 boarding demand)
     lnk('mx_L2upA', 'mx_sD3Up',  20, 5.3),
     lnk('mx_L2upA', 'mx_esD3Up', 15, 15.9),
     lnk('mx_L2upA', 'mx_elD3Up', 10, 2.1),
-    lnk('mx_L2upA', 'mx_TR23',   45, 5.7), // →호선3 (20%)
+    lnk('mx_L2upA', 'mx_TR23',   45, 4.1), // →호선3 (≈15%)
 
-    // 호선2 하행 하차: 80% 출구방향, 20% L3환승
+    // 호선2 하행 하차: 85% 출구방향, 15% L3환승 (was 80%/20%; lowered to reduce L3 boarding demand)
     lnk('mx_L2dnA', 'mx_sD3Up',  20, 5.3),
     lnk('mx_L2dnA', 'mx_esD3Up', 15, 15.9),
     lnk('mx_L2dnA', 'mx_elD3Up', 10, 2.1),
-    lnk('mx_L2dnA', 'mx_TR23',   45, 5.7),
+    lnk('mx_L2dnA', 'mx_TR23',   45, 4.1),
 
     // 호선3 하행 하차: 75% 출구방향, 25% 호선1 환승 (TR31: 호선3→호선1)
     lnk('mx_L3dnA', 'mx_sD3Up',  20, 4.5),
