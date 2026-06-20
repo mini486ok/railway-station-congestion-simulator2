@@ -252,4 +252,37 @@ describe('validateConfig', () => {
     // headway=300, dt=1 → OK
     expect(validateConfig(g, defaultConfig()).some((e) => e.includes('배차간격'))).toBe(false)
   })
+
+  // ── R4-R2 유한성 검사 ──
+
+  it('dt_seconds NaN → 유효한 숫자 오류', () => {
+    const g = okGraph()
+    const errs = validateConfig(g, { ...defaultConfig(), dt_seconds: NaN })
+    expect(errs.some((e) => e.includes('dt_seconds는 유효한 숫자여야 합니다'))).toBe(true)
+  })
+
+  it('dt_seconds Infinity → 유효한 숫자 오류', () => {
+    const g = okGraph()
+    const errs = validateConfig(g, { ...defaultConfig(), dt_seconds: Infinity })
+    expect(errs.some((e) => e.includes('dt_seconds는 유효한 숫자여야 합니다'))).toBe(true)
+  })
+
+  it('duration_seconds NaN → 유효한 숫자 오류', () => {
+    const g = okGraph()
+    const errs = validateConfig(g, { ...defaultConfig(), duration_seconds: NaN })
+    expect(errs.some((e) => e.includes('duration_seconds는 유효한 숫자여야 합니다'))).toBe(true)
+  })
+
+  it('dt_seconds finite valid → no error', () => {
+    const g = okGraph()
+    expect(validateConfig(g, { ...defaultConfig(), dt_seconds: 0.5 })).toEqual([])
+  })
+
+  it('headway_sec NaN on platform → 유효한 숫자 오류', () => {
+    const g = okGraph()
+    const p = g.nodes.find((n) => n.type === 'platform')!
+    p.train = { ...p.train!, headway_sec: NaN }
+    const errs = validateConfig(g, defaultConfig())
+    expect(errs.some((e) => e.includes('headway_sec'))).toBe(true)
+  })
 })

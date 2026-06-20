@@ -109,10 +109,12 @@ export default function App() {
       // Copy / Paste — skip when typing in form elements
       if (!isEditableTarget(e.target)) {
         if (e.key === 'c') {
+          let copied = false
           if (selNode) {
             const node = nodes.find((n) => n.id === selNode)
             if (node) {
               clipboardRef.current = { kind: 'node', data: JSON.parse(JSON.stringify(node)) }
+              copied = true
             }
           } else if (selLink !== null) {
             const link = links[selLink]
@@ -121,8 +123,10 @@ export default function App() {
                 kind: 'link',
                 data: { distance: link.distance, weight: link.weight, travel_time: link.travel_time },
               }
+              copied = true
             }
           }
+          if (copied) e.preventDefault()
           return
         }
 
@@ -280,6 +284,7 @@ export default function App() {
                       </button>
                     )}
                     <button
+                      disabled={useStore.getState().nodes.length === 0}
                       style={{ display: 'block', width: '100%', textAlign: 'left', borderRadius: 0, border: 'none', background: 'none', padding: '7px 14px' }}
                       onClick={() => {
                         const name = prompt('템플릿 이름을 입력하세요')
@@ -290,7 +295,7 @@ export default function App() {
                         }
                         setTmplMenuOpen(false)
                       }}
-                      title="현재 구성을 템플릿으로 저장"
+                      title={useStore.getState().nodes.length === 0 ? '노드를 먼저 추가하세요' : '현재 구성을 템플릿으로 저장'}
                     >
                       현재 구성을 템플릿으로 저장
                     </button>
@@ -408,7 +413,7 @@ export default function App() {
                 <>
                   <div className="col-header">
                     <span className="col-title">속성 · 내보내기</span>
-                    <button className="col-toggle-btn" title="패널 접기" onClick={() => toggleCollapse('right')}>▶</button>
+                    <button className="col-toggle-btn" title="패널 접기 (속성·내보내기 숨김)" onClick={() => toggleCollapse('right')}>▶</button>
                   </div>
                   <ValidationBanner />
                   {selNode && <NodeInspector nodeId={selNode} />}

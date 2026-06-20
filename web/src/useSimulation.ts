@@ -132,10 +132,14 @@ export function useSimulation(opts: Options = {}) {
 
   const reset = useCallback(async () => {
     runningRef.current = false
-    if (!initedRef.current) { await prepare(); return }
+    if (dirty || !initedRef.current) {
+      // project changed (dirty) or not yet initialised → re-prepare from current store
+      await prepare()
+      return
+    }
     const snap = await client().reset()
     setSnapshot(snap); setHistory([snap]); setStatus('ready')
-  }, [client, prepare])
+  }, [client, prepare, dirty])
 
   const runInstant = useCallback(async (): Promise<boolean> => {
     runningRef.current = false

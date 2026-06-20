@@ -178,11 +178,21 @@ export function validateGraph(graph: StationGraphJSON): string[] {
 // 프로젝트/설정 레벨 검증 (dt, duration, headway vs dt)
 export function validateConfig(graph: StationGraphJSON, config: SimConfig): string[] {
   const errors: string[] = []
-  if (config.dt_seconds <= 0) errors.push('dt_seconds는 0보다 커야 합니다')
-  if (config.duration_seconds <= 0) errors.push('duration_seconds는 0보다 커야 합니다')
+  if (!Number.isFinite(config.dt_seconds)) {
+    errors.push('dt_seconds는 유효한 숫자여야 합니다')
+  } else if (config.dt_seconds <= 0) {
+    errors.push('dt_seconds는 0보다 커야 합니다')
+  }
+  if (!Number.isFinite(config.duration_seconds)) {
+    errors.push('duration_seconds는 유효한 숫자여야 합니다')
+  } else if (config.duration_seconds <= 0) {
+    errors.push('duration_seconds는 0보다 커야 합니다')
+  }
   for (const n of graph.nodes) {
     if (n.type === 'platform' && n.train) {
-      if (n.train.headway_sec > 0 && n.train.headway_sec < config.dt_seconds) {
+      if (!Number.isFinite(n.train.headway_sec)) {
+        errors.push(`노드 ${n.id}: 배차간격(headway_sec)은 유효한 숫자여야 합니다`)
+      } else if (n.train.headway_sec > 0 && n.train.headway_sec < config.dt_seconds) {
         errors.push(`노드 ${n.id}: 배차간격(headway)이 Δt(dt_seconds)보다 작아 열차가 누락됩니다`)
       }
     }

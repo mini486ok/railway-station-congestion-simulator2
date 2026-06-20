@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useStore } from '../store'
 import { runBatch, type BatchSpec } from '../batch'
 import { bundleToZip, saveBlob } from '../download'
-import { validateGraph } from '../validation'
+import { validateGraph, validateConfig } from '../validation'
 import type { useSimulation } from '../useSimulation'
 
 export function BatchPanel({ sim }: { sim: ReturnType<typeof useSimulation> }) {
@@ -16,7 +16,10 @@ export function BatchPanel({ sim }: { sim: ReturnType<typeof useSimulation> }) {
 
   async function go() {
     const project = toProject()
-    const errs = validateGraph(project.graph)
+    const errs = [
+      ...validateGraph(project.graph),
+      ...validateConfig(project.graph, project.config),
+    ]
     if (errs.length) { alert(`검증 오류:\n${errs.join('\n')}`); return }
     const spec: BatchSpec = {
       runs, baseSeed,
