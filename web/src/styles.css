@@ -21,9 +21,11 @@ progress { width: 200px; }
 .infotip { position: relative; display: inline-block; margin-left: 4px; }
 .infotip-btn { all: unset; cursor: pointer; color: #2a6; font-size: 12px; line-height: 1; padding: 0 2px; }
 .infotip-btn:hover { color: #084; }
-.infotip-pop { position: absolute; left: 0; top: 18px; z-index: 50; width: 220px;
+/* 포털(body)로 띄우는 fixed 팝업 — 부모 overflow에 잘리거나 가려지지 않음. top/left는 인라인 계산 */
+.infotip-pop { position: fixed; z-index: 9999; width: 250px; max-width: calc(100vw - 16px);
   background: #1a2b3c; color: #fff; padding: 8px 10px; border-radius: 6px;
-  font-size: 12px; line-height: 1.4; box-shadow: 0 4px 12px rgba(0,0,0,.25); font-weight: 400; }
+  font-size: 12px; line-height: 1.45; box-shadow: 0 6px 18px rgba(0,0,0,.35); font-weight: 400;
+  white-space: normal; word-break: break-word; }
 .tabs { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
 .tabs button { background: #163a5f; color: #cfe; border: 1px solid #2a5a8a; }
 .tabs button.active { background: #2a6; color: #fff; border-color: #2a6; }
@@ -70,3 +72,18 @@ progress { width: 200px; }
 .profile-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 4px; align-items: center; margin: 2px 0; }
 .profile-header span { padding: 2px 4px; background: #f0f4f0; border-radius: 3px; }
 .profile-header { margin-bottom: 2px; }
+
+/* 그래프 분석 확대 모달 */
+.chart-modal-backdrop { position: fixed; inset: 0; z-index: 3000; background: rgba(0,0,0,0.5);
+  display: flex; align-items: center; justify-content: center; padding: 2vh 2vw; box-sizing: border-box; }
+.chart-modal { background: #fff; width: 94vw; height: 92vh; max-width: 1600px; border-radius: 8px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.4); display: flex; flex-direction: column; overflow: hidden; }
+.chart-modal-header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 10px 14px; border-bottom: 1px solid #dde; background: #f5f8fb; }
+.chart-modal-header strong { font-size: 14px; color: #234; }
+.chart-modal-controls { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+.chart-modal-close { all: unset; cursor: pointer; font-size: 16px; font-weight: 700; color: #555;
+  padding: 2px 8px; border-radius: 4px; }
+.chart-modal-close:hover { background: #e6356a; color: #fff; }
+.chart-modal-body { flex: 1; min-height: 0; padding: 8px 14px; overflow: auto; }
+.chart-modal-hint { font-size: 12px; color: #777; padding: 6px 14px; border-top: 1px solid #eef; }
